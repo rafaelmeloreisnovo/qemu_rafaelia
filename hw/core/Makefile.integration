@@ -8,7 +8,8 @@ LDFLAGS = -lm -lpthread
 # Source files
 CORE_SRCS = rafaelia-core.c rafaelia-matrix-core.c rafaelia-rmr-lowlevel.c rafaelia-lowlevel.c rafaelia-qemu-shell-standalone.c
 INTEGRATION_SRCS = rafaelia-integration-hub.c
-CONNECTOR_SRCS = connectors/userland-connector.c \
+CONNECTOR_SRCS = connectors/rafaelia-connector-ipc.c \
+                 connectors/userland-connector.c \
                  connectors/magisk-connector.c \
                  connectors/llama-connector.c \
                  connectors/private-connector.c
@@ -86,8 +87,9 @@ rafaelia-matrix-core.o: rafaelia-matrix-core.c rafaelia-matrix-core.h rafaelia-l
 rafaelia-lowlevel.o: rafaelia-lowlevel.c rafaelia-lowlevel.h
 rafaelia-qemu-shell-standalone.o: rafaelia-qemu-shell-standalone.c ../../include/hw/core/rafaelia-core.h
 rafaelia-integration-hub.o: rafaelia-integration-hub.c ../../include/hw/core/rafaelia-integration.h ../../include/hw/core/rafaelia-core.h
-connectors/userland-connector.o: connectors/userland-connector.c ../../include/hw/core/rafaelia-integration.h
-connectors/magisk-connector.o: connectors/magisk-connector.c ../../include/hw/core/rafaelia-integration.h
-connectors/llama-connector.o: connectors/llama-connector.c ../../include/hw/core/rafaelia-integration.h
+connectors/rafaelia-connector-ipc.o: connectors/rafaelia-connector-ipc.c ../../include/hw/core/rafaelia-connector-ipc.h
+connectors/userland-connector.o: connectors/userland-connector.c ../../include/hw/core/rafaelia-integration.h ../../include/hw/core/rafaelia-connector-ipc.h
+connectors/magisk-connector.o: connectors/magisk-connector.c ../../include/hw/core/rafaelia-integration.h ../../include/hw/core/rafaelia-connector-ipc.h
+connectors/llama-connector.o: connectors/llama-connector.c ../../include/hw/core/rafaelia-integration.h ../../include/hw/core/rafaelia-connector-ipc.h
 connectors/private-connector.o: connectors/private-connector.c ../../include/hw/core/rafaelia-integration.h
 rafaelia-integration-test.o: rafaelia-integration-test.c ../../include/hw/core/rafaelia-integration.h ../../include/hw/core/rafaelia-core.h
