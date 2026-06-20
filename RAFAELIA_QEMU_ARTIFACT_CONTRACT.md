@@ -84,6 +84,17 @@ Campos mínimos:
 }
 ```
 
+## Scripts produtores
+
+O produtor deve usar:
+
+```bash
+tools/rafaelia/package_qemu_artifact.sh --build-dir build --out-dir dist/rafaelia-qemu
+tools/rafaelia/check_qemu_artifact_contract.sh --artifact-root dist/rafaelia-qemu/qemu-rafaelia-artifact
+```
+
+O primeiro script empacota binários já compilados. O segundo valida o layout produzido antes de publicar release/artifact.
+
 ## Responsabilidade do Vectras
 
 O Vectras deve:
