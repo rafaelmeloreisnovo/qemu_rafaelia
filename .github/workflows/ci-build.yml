@@ -60,16 +60,92 @@ jobs:
         run: |
           ninja -C build subprojects/libvhost-user/libvhost-user.a
 
-      - name: Collect artifacts
+      - name: Collect smoke artifacts
         run: |
           mkdir -p artifacts
           cp -v build/subprojects/libvhost-user/libvhost-user.a artifacts/
           cp -v build/config.log artifacts/
           cp -v build/config-host.h artifacts/
 
-      - name: Upload build artifacts
+      - name: Upload smoke artifacts
         uses: actions/upload-artifact@v4
         with:
           name: qemu-smoke-build-artifacts
           path: artifacts/
           if-no-files-found: error
+
+  build-qemu-binaries:
+    runs-on: ubuntu-latest
+    needs: validate-workflows
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            pkg-config \
+            python3 \
+            python3-pip \
+            git \
+            libglib2.0-dev \
+            libpixman-1-dev \
+            zlib1g-dev \
+            libfdt-dev \
+            libcapstone-dev \
+            libslirp-dev
+
+      - name: Configure QEMU (multi-target)
+        run: |
+          ./configure \
+            --target-list=x86_64-softmmu,aarch64-softmmu,i386-softmmu \
+            --disable-werror \
+            --disable-docs \
+            --disable-gtk \
+            --disable-sdl \
+            --disable-curses \
+            --disable-vnc-jpeg \
+            --disable-spice \
+            --prefix=/usr/local
+
+      - name: Build QEMU system targets
+        run: |
+          ninja -C build qemu-system-x86_64 qemu-system-aarch64 qemu-system-i386
+        timeout-minutes: 45
+
+      - name: Verify binaries exist
+        run: |
+          for bin in build/qemu-system-x86_64 build/qemu-system-aarch64 build/qemu-system-i386; do
+            test -x "${bin}" && echo "OK: ${bin}" || (echo "MISSING: ${bin}" && exit 1)
+          done
+
+      - name: Package RAFAELIA artifact
+        run: |
+          bash tools/rafaelia/package_qemu_artifact.sh \
+            --build-dir build \
+            --out-dir dist/rafaelia-qemu
+
+      - name: Verify artifact contract
+        run: |
+          bash tools/rafaelia/check_qemu_artifact_contract.sh \
+            --artifact-root dist/rafaelia-qemu/qemu-rafaelia-artifact
+
+      - name: Upload RAFAELIA artifact tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-rafaelia-artifact
+          path: dist/rafaelia-qemu/qemu-rafaelia-artifact-*.tar.gz
+          if-no-files-found: error
+
+      - name: Upload artifact manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-rafaelia-manifest
+          path: |
+            dist/rafaelia-qemu/qemu-rafaelia-artifact/qemu-exec.json
+            dist/rafaelia-qemu/qemu-rafaelia-artifact/BUILD_INFO.json
+            dist/rafaelia-qemu/qemu-rafaelia-artifact/SHA256SUMS.txt
+          if-no-files-found: warn

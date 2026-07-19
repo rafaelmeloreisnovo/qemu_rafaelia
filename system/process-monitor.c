@@ -12,6 +12,7 @@
 #include "qemu/thread.h"
 #include "system/runstate.h"
 #include "system/cpus.h"
+#include "system/process-monitor.h"
 
 /*
  * Performance monitoring for QEMU core processes

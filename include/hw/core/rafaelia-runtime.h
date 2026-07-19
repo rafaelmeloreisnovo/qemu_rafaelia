@@ -22,6 +22,7 @@ typedef struct rafaelia_runtime_config {
     bool debug;
     uint32_t tick_ms;
     rafaelia_runtime_mode_t mode;
+    const char *vm_name;
 } rafaelia_runtime_config_t;
 
 rafaelia_runtime_config_t rafaelia_runtime_config_default(void);

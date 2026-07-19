@@ -10,12 +10,11 @@
 #ifndef QEMU_PROCESS_HEALTH_H
 #define QEMU_PROCESS_HEALTH_H
 
-/*
- * Health state values
- */
-#define HEALTH_STATE_HEALTHY  0
-#define HEALTH_STATE_DEGRADED 1
-#define HEALTH_STATE_CRITICAL 2
+typedef enum {
+    HEALTH_STATE_HEALTHY = 0,
+    HEALTH_STATE_DEGRADED,
+    HEALTH_STATE_CRITICAL,
+} HealthState;
 
 /*
  * Initialize the health check subsystem

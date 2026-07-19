@@ -10,10 +10,13 @@
 #include "qemu/osdep.h"
 #include "qemu/timer.h"
 #include "qemu/thread.h"
+#include "qemu/main-loop.h"
 #include "qemu/error-report.h"
+#include "hw/core/cpu.h"
 #include "system/runstate.h"
 #include "system/cpus.h"
 #include "system/process-monitor.h"
+#include "system/process-health.h"
 
 /*
  * Health check and auto-recovery system for QEMU processes
@@ -24,12 +27,6 @@
 #define MAIN_LOOP_STALL_THRESHOLD 5000 /* 5 seconds without progress */
 #define CPU_KICK_EXCESSIVE_RATE 10000  /* kicks per second threshold */
 #define BQL_CONTENTION_HIGH 1000       /* contentions per second threshold */
-
-typedef enum {
-    HEALTH_STATE_HEALTHY = 0,
-    HEALTH_STATE_DEGRADED,
-    HEALTH_STATE_CRITICAL,
-} HealthState;
 
 typedef struct ProcessHealthStatus {
     HealthState state;

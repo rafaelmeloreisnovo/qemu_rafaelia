@@ -50,6 +50,7 @@ rafaelia_runtime_config_t rafaelia_runtime_config_default(void)
         .debug = false,
         .tick_ms = 100,
         .mode = RAFAELIA_RUNTIME_MODE_SILENT,
+        .vm_name = NULL,
     };
 }
 
@@ -93,8 +94,8 @@ static void rafaelia_runtime_log_tick(const rafaelia_runtime_state_t *state)
     if (state->config.mode == RAFAELIA_RUNTIME_MODE_TRACE ||
         state->config.debug) {
         trace_rafaelia_runtime_tick(state->ticks_total,
-                                    state->entropy_last,
-                                    state->coherence_last,
+                                    (int64_t)(state->entropy_last * 1e6),
+                                    (int64_t)(state->coherence_last * 1e6),
                                     state->running,
                                     rafaelia_runtime_mode_name(state->config.mode));
     }
@@ -363,8 +364,8 @@ void rafaelia_runtime_shutdown(void)
     }
 
     trace_rafaelia_runtime_shutdown(state->ticks_total,
-                                    state->entropy_last,
-                                    state->coherence_last);
+                                    (int64_t)(state->entropy_last * 1e6),
+                                    (int64_t)(state->coherence_last * 1e6));
     rafaelia_runtime_log_event(state, "shutdown");
 
     if (state->vm_state_entry) {
