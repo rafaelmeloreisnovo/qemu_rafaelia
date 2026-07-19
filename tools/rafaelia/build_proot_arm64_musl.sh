@@ -14,9 +14,12 @@ if [[ "${runtime_arch}" != "aarch64" ]]; then
   exit 1
 fi
 
-if ! ldd --version 2>&1 | grep -qi musl; then
+# musl's loader prints version information but may return a non-zero status when
+# invoked as ldd --version. Inspect the captured text instead of the pipeline code.
+ldd_output="$(ldd --version 2>&1 || true)"
+if ! grep -qi musl <<<"${ldd_output}"; then
   echo "ERROR: this producer requires a musl userspace" >&2
-  ldd --version 2>&1 || true
+  printf '%s\n' "${ldd_output}" >&2
   exit 1
 fi
 
@@ -35,7 +38,7 @@ done
   printf 'execution_mode=proot\n'
   printf 'guest_targets=%s\n' "${TARGET_LIST}"
   printf 'uname=%s\n' "$(uname -a)"
-  printf 'ldd=%s\n' "$(ldd --version 2>&1 | head -n1)"
+  printf 'ldd=%s\n' "$(head -n1 <<<"${ldd_output}")"
 } > "${DIAG_DIR}/BUILD_ATTEMPT.txt"
 
 rm -rf "${BUILD_DIR}" "${OUT_DIR}"
