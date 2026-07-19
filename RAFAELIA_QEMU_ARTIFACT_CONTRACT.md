@@ -6,14 +6,16 @@ Este contrato define como `qemu_rafaelia` entrega artifacts auditáveis sem tran
 
 ```text
 qemu_rafaelia = produtor do motor QEMU/RAFAELIA
-Vectras-VM-Android = consumidor Android, instalador e auditor do motor
+Vectras-VM-Android = consumidor, instalador e auditor do motor
 ```
 
 ## Invariante
 
 ```text
 source commit pinned
-+ runtime ABI explícita
++ guest targets explícitos
++ runtime OS/arch/ABI/libc
++ execution_mode
 + binaries packaged
 + SHA256SUMS
 + executable format
@@ -21,28 +23,35 @@ source commit pinned
 + BUILD_INFO.json
 ```
 
-O nome `qemu-system-aarch64` descreve o **guest target emulado**. Ele não prova que o executável roda em host AArch64/Android.
-
-Exemplo:
+O nome `qemu-system-aarch64` descreve o **guest target emulado**. Ele não prova onde o executável roda.
 
 ```text
 qemu-system-aarch64
-guest target = aarch64
-runtime host do artifact observado em CI = linux-x86_64
+├── guest target: aarch64
+└── runtime possível: linux-x86_64, linux-aarch64 ou android-aarch64
 ```
 
-Essa distinção é obrigatória.
+Nenhum artifact pode mudar de classe por renomear arquivos.
+
+## Quatro dimensões independentes
+
+| Dimensão | Exemplo | Significado |
+|---|---|---|
+| guest target | `arm64` | arquitetura da máquina virtual emulada |
+| runtime ABI | `linux-aarch64` | OS e CPU que executam o processo QEMU |
+| libc | `musl` | ABI de userspace exigida pelo executável |
+| execution mode | `proot` | mecanismo usado pelo Vectras para lançar o processo |
 
 ## Classes de artifact
 
-| Classe | runtime.os | runtime.arch | Consumível pelo Vectras Android |
-|---|---|---|---|
-| CI host Linux | `linux` | `x86_64` | não; somente build/teste/contrato |
-| Android ARM64 | `android` | `aarch64` | sim, após ABI/hash/preflight |
-| Android ARM32 | `android` | `arm` | sim, após ABI/hash/preflight |
-| outro host | explícito | explícito | somente consumidor compatível |
+| Classe | runtime | libc | execution_mode | Uso |
+|---|---|---|---|---|
+| CI host | `linux-x86_64` | `glibc` | `host_ci` | prova build, testes e contrato; não vai ao aparelho |
+| PRoot ARM64 | `linux-aarch64` | `musl` ou `glibc` | `proot` | caminho coerente com `filesDir/distro` se a rootfs usar a mesma libc |
+| PRoot ARM32 | `linux-arm` | `musl` ou `glibc` | `proot` | aparelho ARM32 com rootfs correspondente |
+| Android nativo | `android-aarch64`/`android-arm` | `bionic` | `native_android` | exige launcher sem PRoot e dependências recompiladas para o prefixo Android |
 
-Nenhum artifact pode ser promovido de uma classe para outra por renomear arquivos.
+O launcher canônico atual do Vectras executa o QEMU dentro de PRoot. Portanto, a classe prioritária de consumo é `proot`, não `native_android`.
 
 ## Layout esperado
 
@@ -60,11 +69,9 @@ qemu-rafaelia-artifact-<commit>.tar.gz
     └── LICENSES/
 ```
 
-A presença de um arquivo é opcional por guest target; a identidade de runtime não é opcional.
-
 ## `qemu-exec.json`
 
-Formato mínimo:
+Exemplo PRoot ARM64/musl:
 
 ```json
 {
@@ -72,9 +79,11 @@ Formato mínimo:
   "source_commit": "<git-sha>",
   "version": "10.2.50-rafaelia",
   "runtime": {
-    "os": "android",
+    "os": "linux",
     "arch": "aarch64",
-    "abi": "android-aarch64"
+    "abi": "linux-aarch64",
+    "libc": "musl",
+    "execution_mode": "proot"
   },
   "binary": {
     "x86_64": "bin/qemu-system-x86_64",
@@ -87,11 +96,9 @@ Formato mínimo:
 }
 ```
 
-As chaves de `binary` representam guests; `runtime` representa onde os executáveis realmente podem rodar.
+As chaves de `binary` representam guests; `runtime` representa o processo real.
 
 ## `BUILD_INFO.json`
-
-Campos mínimos:
 
 ```json
 {
@@ -102,9 +109,11 @@ Campos mínimos:
   "built_at_utc": "<iso8601>",
   "build_runner": "<runner que empacotou>",
   "runtime": {
-    "os": "android",
+    "os": "linux",
     "arch": "aarch64",
-    "abi": "android-aarch64"
+    "abi": "linux-aarch64",
+    "libc": "musl",
+    "execution_mode": "proot"
   },
   "binaries": [
     {
@@ -119,77 +128,115 @@ Campos mínimos:
 
 ## Scripts produtores
 
+### Host CI Linux x86_64
+
 ```bash
 tools/rafaelia/package_qemu_artifact.sh \
   --build-dir build \
   --out-dir dist/rafaelia-qemu \
   --runtime-os linux \
-  --runtime-arch x86_64
-
-tools/rafaelia/check_qemu_artifact_contract.sh \
-  --artifact-root dist/rafaelia-qemu/qemu-rafaelia-artifact
+  --runtime-arch x86_64 \
+  --runtime-libc glibc \
+  --execution-mode host_ci
 ```
 
-Em cross-build Android, os parâmetros devem declarar o runtime alvo:
+### PRoot Linux AArch64/musl
 
 ```bash
---runtime-os android --runtime-arch aarch64
+tools/rafaelia/package_qemu_artifact.sh \
+  --build-dir build \
+  --out-dir dist/rafaelia-qemu \
+  --runtime-os linux \
+  --runtime-arch aarch64 \
+  --runtime-libc musl \
+  --execution-mode proot
 ```
 
-O checker cruza a arquitetura declarada com `executable_format`; um ELF x86-64 não passa como `android-aarch64`.
+### Android/Bionic futuro
+
+```bash
+tools/rafaelia/package_qemu_artifact.sh \
+  --runtime-os android \
+  --runtime-arch aarch64 \
+  --runtime-libc bionic \
+  --execution-mode native_android
+```
+
+O checker cruza arquitetura declarada, formato executável e combinações de OS/libc/modo.
 
 ## Responsabilidade do Vectras
 
-O Vectras deve:
+O consumidor deve:
 
-1. importar artifact por commit/digest pinado;
+1. importar artifact por commit e digest pinados;
 2. verificar `SHA256SUMS.txt`;
-3. exigir `runtime.os == android`;
-4. exigir `runtime.arch` compatível com `Build.SUPPORTED_ABIS`;
-5. rejeitar `linux-*`, mesmo que os guest targets estejam corretos;
-6. instalar binários em caminho controlado;
-7. executar preflight antes da VM;
-8. registrar source commit, runtime ABI, binary path e SHA no ledger.
+3. selecionar somente `execution_mode` suportado pelo launcher;
+4. para `proot`, exigir `runtime.os=linux` e libc igual à rootfs instalada;
+5. para `native_android`, exigir `runtime.os=android`, `libc=bionic` e launcher nativo dedicado;
+6. exigir `runtime.arch` compatível com o aparelho;
+7. instalar binários em caminho controlado;
+8. executar preflight antes da VM;
+9. registrar source commit, runtime, caminho e SHA no ledger.
+
+Um artifact `host_ci` nunca é consumível pelo app.
 
 ## Responsabilidade do qemu_rafaelia
 
 O produtor deve:
 
-1. manter código QEMU/RAFAELIA e IPC;
-2. construir por runtime ABI e guest target;
-3. declarar runtime sem inferência pelo nome do binário;
-4. empacotar checksums e formatos executáveis;
-5. publicar artifacts separados por runtime;
-6. preservar licença/fonte GPLv2;
+1. construir por runtime e guest target;
+2. declarar OS, CPU, libc e modo sem inferência pelo nome do binário;
+3. empacotar checksums e formatos executáveis;
+4. publicar artifacts separados por classe;
+5. preservar licença/fonte GPLv2;
+6. manter receita reproduzível das dependências;
 7. nunca exigir que o Vectras importe a árvore completa para iniciar uma VM.
 
-## Gate de aceitação geral
+## Gates
 
-Um artifact é válido como artifact QEMU quando:
+### Gate geral
 
-- possui ao menos um `qemu-system-*` executável;
-- possui `SHA256SUMS.txt` válido;
-- possui `qemu-exec.json` e `BUILD_INFO.json` coerentes;
-- possui runtime OS/arch/ABI explícitas;
-- a arquitetura declarada corresponde ao formato executável;
-- o source commit está pinado.
+- ao menos um `qemu-system-*` executável;
+- `SHA256SUMS.txt` válido;
+- JSONs coerentes;
+- runtime completo;
+- arquitetura declarada compatível com ELF/PE/Mach-O;
+- source commit pinado.
 
-## Gate adicional Android
-
-Para consumo pelo Vectras:
+### Gate PRoot
 
 ```text
-runtime.os = android
-runtime.arch ∈ {aarch64, arm}
-+ dependências Android/prefix compatíveis
-+ instalação/preflight/ADB
+execution_mode = proot
+runtime.os = linux
+runtime.libc ∈ {musl, glibc}
+runtime.arch compatível com aparelho
+rootfs.libc = runtime.libc
 ```
 
-O artifact Linux produzido pelo CI multi-target fecha Q1/Q2 e prova o código QEMU, mas **não fecha Q3 Android/NDK**.
+### Gate Android nativo
+
+```text
+execution_mode = native_android
+runtime.os = android
+runtime.libc = bionic
+prefix/package recompilados
+launcher sem PRoot
+ADB + preflight
+```
+
+## Estado de Q1–Q3
+
+| Gap | Estado |
+|---|---|
+| Q1 binários `qemu-system-*` | `PROVEN_CI[LINUX_X86_64_HOST]` |
+| Q2 packaging/contrato | `PROVEN_CI`, agora endurecido com runtime/libc/modo |
+| Q3 runtime móvel | dividido em `PROOT_LINUX_ARM64` prioritário e `NATIVE_ANDROID_NDK` futuro |
+
+O artifact Linux x86_64 verde prova o código e o empacotamento, mas não é executável no aparelho.
 
 ## Fórmula compacta
 
 ```text
-guest target ≠ runtime ABI
-QEMU compila fora; artifact declara; Vectras verifica; dispositivo prova.
+guest target ≠ runtime ABI ≠ libc ≠ execution mode
+QEMU compila; artifact declara; Vectras verifica; dispositivo prova.
 ```
