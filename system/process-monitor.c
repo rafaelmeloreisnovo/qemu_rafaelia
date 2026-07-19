@@ -10,6 +10,7 @@
 #include "qemu/osdep.h"
 #include "qemu/timer.h"
 #include "qemu/thread.h"
+#include "qemu/atomic.h"
 #include "system/runstate.h"
 #include "system/cpus.h"
 #include "system/process-monitor.h"
@@ -17,6 +18,13 @@
 /*
  * Performance monitoring for QEMU core processes
  * Tracks key metrics without external dependencies
+ *
+ * Locking discipline:
+ *   Counters (main_loop_iterations, cpu_kicks, runstate_transitions,
+ *   bql_contentions) are written lock-free with qatomic_inc() and read
+ *   with qatomic_read(). stats_mutex is held only by get_stats(),
+ *   get_rates(), and reset() to guarantee snapshot coherence across
+ *   multiple counter reads in a single call.
  */
 
 typedef struct ProcessStats {
@@ -75,18 +83,24 @@ void qemu_process_monitor_get_stats(uint64_t *loops, uint64_t *kicks,
         return;
     }
 
+    /*
+     * Hold the mutex so that callers that read multiple counters see a
+     * coherent snapshot. Within the locked section use qatomic_read() so
+     * that the compiler cannot cache or hoist the loads past the memory
+     * barrier implied by the mutex acquire.
+     */
     qemu_mutex_lock(&stats_mutex);
     if (loops) {
-        *loops = process_stats.main_loop_iterations;
+        *loops = qatomic_read(&process_stats.main_loop_iterations);
     }
     if (kicks) {
-        *kicks = process_stats.cpu_kicks;
+        *kicks = qatomic_read(&process_stats.cpu_kicks);
     }
     if (transitions) {
-        *transitions = process_stats.runstate_transitions;
+        *transitions = qatomic_read(&process_stats.runstate_transitions);
     }
     if (contentions) {
-        *contentions = process_stats.bql_contentions;
+        *contentions = qatomic_read(&process_stats.bql_contentions);
     }
     qemu_mutex_unlock(&stats_mutex);
 }
@@ -97,11 +111,15 @@ void qemu_process_monitor_reset(void)
         return;
     }
 
+    /*
+     * Use qatomic_set() to zero the counters so that concurrent
+     * qatomic_inc() calls in record_* functions see fully-ordered stores.
+     */
     qemu_mutex_lock(&stats_mutex);
-    process_stats.main_loop_iterations = 0;
-    process_stats.cpu_kicks = 0;
-    process_stats.runstate_transitions = 0;
-    process_stats.bql_contentions = 0;
+    qatomic_set(&process_stats.main_loop_iterations, 0);
+    qatomic_set(&process_stats.cpu_kicks, 0);
+    qatomic_set(&process_stats.runstate_transitions, 0);
+    qatomic_set(&process_stats.bql_contentions, 0);
     process_stats.last_update_time = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
     qemu_mutex_unlock(&stats_mutex);
 }
@@ -117,24 +135,27 @@ void qemu_process_monitor_get_rates(double *loop_rate, double *kick_rate,
     }
 
     qemu_mutex_lock(&stats_mutex);
-    
+
     int64_t current_time = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
     int64_t last_time = process_stats.last_update_time;
     int64_t elapsed_ns = current_time - last_time;
-    
+
     if (elapsed_ns > 0) {
         double elapsed_sec = elapsed_ns / 1000000000.0;
-        
+
         if (loop_rate) {
-            *loop_rate = process_stats.main_loop_iterations / elapsed_sec;
+            *loop_rate = (double)qatomic_read(&process_stats.main_loop_iterations)
+                         / elapsed_sec;
         }
         if (kick_rate) {
-            *kick_rate = process_stats.cpu_kicks / elapsed_sec;
+            *kick_rate = (double)qatomic_read(&process_stats.cpu_kicks)
+                        / elapsed_sec;
         }
         if (transition_rate) {
-            *transition_rate = process_stats.runstate_transitions / elapsed_sec;
+            *transition_rate = (double)qatomic_read(&process_stats.runstate_transitions)
+                               / elapsed_sec;
         }
     }
-    
+
     qemu_mutex_unlock(&stats_mutex);
 }
