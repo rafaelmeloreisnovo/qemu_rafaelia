@@ -5,6 +5,7 @@
 #include "qemu/osdep.h"
 #include "qemu/cacheinfo.h"
 #include "qemu/log.h"
+#include "qemu/memalign.h"
 #include "hw/core/rafaelia-rmr.h"
 #include "hw/core/rafaelia-rmr-lowlevel.h"
 #include "hw/core/rafaelia-rmr-instr.h"
