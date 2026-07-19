@@ -1,7 +1,7 @@
 #include "qemu/osdep.h"
 #include "hw/core/rafaelia-rmr-instr.h"
 
-#if defined(CONFIG_LINUX)
+#if defined(CONFIG_LINUX) && defined(__aarch64__)
 #include <sys/auxv.h>
 #include <asm/hwcap.h>
 #endif
