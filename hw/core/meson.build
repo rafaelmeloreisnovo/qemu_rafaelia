@@ -43,6 +43,7 @@ system_ss.add(files(
   'qdev-properties-system.c',
   'rafaelia_bridge.c',
   'rafaelia-core.c',
+  'rafaelia-integration-hub.c',
   'rafaelia-lowlevel.c',
   'rafaelia-qemu-shell.c',
   'rafaelia-route-table.c',
