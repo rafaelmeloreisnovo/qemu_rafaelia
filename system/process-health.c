@@ -10,10 +10,13 @@
 #include "qemu/osdep.h"
 #include "qemu/timer.h"
 #include "qemu/thread.h"
+#include "qemu/main-loop.h"
 #include "qemu/error-report.h"
+#include "hw/core/cpu.h"
 #include "system/runstate.h"
 #include "system/cpus.h"
 #include "system/process-monitor.h"
+#include "system/process-health.h"
 
 /*
  * Health check and auto-recovery system for QEMU processes
