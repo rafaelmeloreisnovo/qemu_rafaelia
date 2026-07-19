@@ -28,12 +28,6 @@
 #define CPU_KICK_EXCESSIVE_RATE 10000  /* kicks per second threshold */
 #define BQL_CONTENTION_HIGH 1000       /* contentions per second threshold */
 
-typedef enum {
-    HEALTH_STATE_HEALTHY = 0,
-    HEALTH_STATE_DEGRADED,
-    HEALTH_STATE_CRITICAL,
-} HealthState;
-
 typedef struct ProcessHealthStatus {
     HealthState state;
     uint64_t last_main_loop_count;
