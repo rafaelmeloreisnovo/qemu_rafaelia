@@ -12,7 +12,8 @@ Validates:
   - SHA256SUMS.txt
   - at least one executable bin/qemu-system-*
   - JSON consistency and SHA256 integrity
-  - explicit runtime OS/architecture/ABI
+  - explicit runtime OS/architecture/ABI/libc/execution mode
+  - valid runtime combinations for host_ci, proot and native_android
   - declared runtime architecture against executable file format
 USAGE
 }
@@ -100,6 +101,9 @@ if runtime != build_runtime:
 runtime_os = str(runtime.get("os", "")).strip().lower()
 runtime_arch = str(runtime.get("arch", "")).strip().lower()
 runtime_abi = str(runtime.get("abi", "")).strip().lower()
+runtime_libc = str(runtime.get("libc", "")).strip().lower()
+execution_mode = str(runtime.get("execution_mode", "")).strip().lower()
+
 if not runtime_os:
     errors.append("runtime.os is empty")
 if not runtime_arch:
@@ -110,6 +114,35 @@ if runtime_os not in {"linux", "android", "darwin", "windows"}:
     errors.append(f"unsupported or ambiguous runtime.os: {runtime_os!r}")
 if runtime_arch not in {"x86_64", "i386", "aarch64", "arm", "riscv32", "riscv64"}:
     errors.append(f"unsupported or ambiguous runtime.arch: {runtime_arch!r}")
+if runtime_libc not in {"glibc", "musl", "bionic", "none"}:
+    errors.append(f"unsupported or ambiguous runtime.libc: {runtime_libc!r}")
+if execution_mode not in {"host_ci", "proot", "native_android"}:
+    errors.append(f"unsupported execution_mode: {execution_mode!r}")
+
+# Execution mode is part of the security boundary. These combinations prevent
+# a host-CI binary from being consumed as a PRoot or native Android runtime.
+if execution_mode == "host_ci":
+    if runtime_os == "android":
+        errors.append("host_ci artifact must not declare runtime.os=android")
+elif execution_mode == "proot":
+    if runtime_os != "linux":
+        errors.append("proot artifact requires runtime.os=linux")
+    if runtime_libc not in {"glibc", "musl"}:
+        errors.append("proot artifact requires glibc or musl")
+    if runtime_arch not in {"aarch64", "arm", "x86_64", "i386"}:
+        errors.append("proot artifact uses unsupported runtime.arch")
+elif execution_mode == "native_android":
+    if runtime_os != "android":
+        errors.append("native_android artifact requires runtime.os=android")
+    if runtime_libc != "bionic":
+        errors.append("native_android artifact requires runtime.libc=bionic")
+    if runtime_arch not in {"aarch64", "arm", "x86_64", "i386"}:
+        errors.append("native_android artifact uses unsupported Android ABI architecture")
+
+if runtime_os == "android" and runtime_libc != "bionic":
+    errors.append("runtime.os=android requires runtime.libc=bionic")
+if runtime_os == "linux" and runtime_libc == "bionic":
+    errors.append("runtime.os=linux must not declare runtime.libc=bionic")
 
 binary_map = qemu_exec.get("binary", {})
 sha_map = qemu_exec.get("sha256", {})
@@ -175,5 +208,7 @@ if errors:
 print("Producer artifact contract OK")
 print(f"source_commit={qemu_exec['source_commit']}")
 print(f"runtime_abi={runtime_abi}")
+print(f"runtime_libc={runtime_libc}")
+print(f"execution_mode={execution_mode}")
 print("guest_architectures=" + ",".join(sorted(binary_map)))
 PY
