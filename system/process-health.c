@@ -36,6 +36,8 @@ typedef struct ProcessHealthStatus {
     bool recovery_in_progress;
     uint64_t recovery_attempts;
     uint64_t successful_recoveries;
+    uint64_t last_bql_contention_count;
+    int64_t last_bql_check_time_ms;
 } ProcessHealthStatus;
 
 static ProcessHealthStatus health_status = {
@@ -74,13 +76,26 @@ static bool check_cpu_kick_rate(void)
 }
 
 /*
- * Check BQL contention levels
- * TODO: Implement proper rate calculation based on time window
+ * Check BQL contention levels using rate over the last health-check interval
  */
 static bool check_bql_contention(void)
 {
-    /* Placeholder - needs proper rate-based implementation */
-    return true;
+    uint64_t current_contentions = 0;
+    qemu_process_monitor_get_stats(NULL, NULL, NULL, &current_contentions);
+
+    int64_t now_ms = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
+    int64_t elapsed_ms = now_ms - health_status.last_bql_check_time_ms;
+
+    bool ok = true;
+    if (elapsed_ms > 0 && health_status.last_bql_check_time_ms > 0) {
+        uint64_t delta = current_contentions - health_status.last_bql_contention_count;
+        double rate = (double)delta * 1000.0 / elapsed_ms;
+        ok = rate < BQL_CONTENTION_HIGH;
+    }
+
+    health_status.last_bql_contention_count = current_contentions;
+    health_status.last_bql_check_time_ms = now_ms;
+    return ok;
 }
 
 /*
@@ -213,7 +228,9 @@ void qemu_process_health_init(void)
     health_check_timer = timer_new_ms(QEMU_CLOCK_REALTIME,
                                       health_check_callback, NULL);
     
-    health_status.last_check_time = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
+    int64_t now_ms = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
+    health_status.last_check_time = now_ms;
+    health_status.last_bql_check_time_ms = now_ms;
 }
 
 /*
