@@ -50,6 +50,7 @@ rafaelia_runtime_config_t rafaelia_runtime_config_default(void)
         .debug = false,
         .tick_ms = 100,
         .mode = RAFAELIA_RUNTIME_MODE_SILENT,
+        .vm_name = NULL,
     };
 }
 
