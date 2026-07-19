@@ -112,9 +112,45 @@ jobs:
             --prefix=/usr/local
 
       - name: Build QEMU system targets
+        shell: bash
         run: |
-          ninja -C build qemu-system-x86_64 qemu-system-aarch64 qemu-system-i386
+          set -o pipefail
+          mkdir -p artifacts/build-diagnostics
+          printf 'commit=%s\nrunner=%s\ntargets=%s\n' \
+            "${GITHUB_SHA}" \
+            "${RUNNER_OS}-${RUNNER_ARCH}" \
+            'qemu-system-x86_64,qemu-system-aarch64,qemu-system-i386' \
+            > artifacts/build-diagnostics/BUILD_ATTEMPT.txt
+          ninja -C build -v \
+            qemu-system-x86_64 \
+            qemu-system-aarch64 \
+            qemu-system-i386 \
+            2>&1 | tee artifacts/build-diagnostics/qemu-system-build.log
         timeout-minutes: 45
+
+      - name: Collect failed-build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p artifacts/build-diagnostics
+          cp -v build/meson-logs/meson-log.txt artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/meson-logs/meson-info.json artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/config.log artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/config-host.h artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/compile_commands.json artifacts/build-diagnostics/ 2>/dev/null || true
+          find build -maxdepth 3 -type f \( -name '*.log' -o -name '*.ninja' \) \
+            -printf '%p\n' | sort > artifacts/build-diagnostics/AVAILABLE_DIAGNOSTICS.txt || true
+          tail -n 500 artifacts/build-diagnostics/qemu-system-build.log \
+            > artifacts/build-diagnostics/qemu-system-build-tail.log || true
+
+      - name: Upload failed-build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-binary-build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/build-diagnostics/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Verify binaries exist
         run: |
