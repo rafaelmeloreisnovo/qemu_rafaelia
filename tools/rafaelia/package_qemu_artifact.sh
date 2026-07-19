@@ -10,8 +10,10 @@ Options:
   --out-dir DIR
   --source-repo OWNER/REPO
   --version VERSION
-  --runtime-os OS          Runtime OS of packaged executables (default: detected host)
-  --runtime-arch ARCH      Runtime CPU architecture (default: detected host)
+  --runtime-os OS          Runtime OS of packaged executables
+  --runtime-arch ARCH      Runtime CPU architecture
+  --runtime-libc LIBC      glibc, musl, bionic or none
+  --execution-mode MODE    host_ci, proot or native_android
   --allow-missing
 
 Packages built qemu-system-* binaries into a RAFAELIA artifact:
@@ -21,8 +23,8 @@ Packages built qemu-system-* binaries into a RAFAELIA artifact:
   - qemu-rafaelia-artifact-<short-sha>.tar.gz
 
 The script does not build QEMU. It packages binaries already produced by a QEMU build.
-For cross builds, --runtime-os and --runtime-arch are mandatory semantic inputs and
-are checked against each executable's detected file format by the contract checker.
+For cross builds, runtime OS, architecture, libc and execution mode must describe the
+produced executables, not the runner that invoked this script.
 USAGE
 }
 
@@ -32,6 +34,8 @@ SOURCE_REPO="rafaelmeloreisnovo/qemu_rafaelia"
 VERSION=""
 RUNTIME_OS=""
 RUNTIME_ARCH=""
+RUNTIME_LIBC=""
+EXECUTION_MODE=""
 ALLOW_MISSING="false"
 
 while [[ $# -gt 0 ]]; do
@@ -58,6 +62,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --runtime-arch)
       RUNTIME_ARCH="$2"
+      shift 2
+      ;;
+    --runtime-libc)
+      RUNTIME_LIBC="$2"
+      shift 2
+      ;;
+    --execution-mode)
+      EXECUTION_MODE="$2"
       shift 2
       ;;
     --allow-missing)
@@ -113,6 +125,33 @@ normalize_arch() {
   esac
 }
 
+normalize_libc() {
+  local value="${1,,}"
+  case "${value}" in
+    gnu|gnu-libc|glibc) echo "glibc" ;;
+    musl) echo "musl" ;;
+    android|bionic) echo "bionic" ;;
+    none|static) echo "none" ;;
+    *) echo "${value}" ;;
+  esac
+}
+
+detect_libc() {
+  if [[ "${RUNTIME_OS}" == "android" ]]; then
+    echo "bionic"
+    return
+  fi
+  if command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+    echo "glibc"
+    return
+  fi
+  if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
+    echo "musl"
+    return
+  fi
+  echo ""
+}
+
 if [[ -z "${RUNTIME_OS}" ]]; then
   RUNTIME_OS="$(normalize_os "$(uname -s)")"
 else
@@ -125,8 +164,24 @@ else
   RUNTIME_ARCH="$(normalize_arch "${RUNTIME_ARCH}")"
 fi
 
-if [[ -z "${RUNTIME_OS}" || -z "${RUNTIME_ARCH}" ]]; then
-  echo "ERROR: runtime OS and architecture must be resolvable" >&2
+if [[ -z "${RUNTIME_LIBC}" ]]; then
+  RUNTIME_LIBC="$(detect_libc)"
+else
+  RUNTIME_LIBC="$(normalize_libc "${RUNTIME_LIBC}")"
+fi
+
+if [[ -z "${EXECUTION_MODE}" ]]; then
+  if [[ "${RUNTIME_OS}" == "android" ]]; then
+    EXECUTION_MODE="native_android"
+  else
+    EXECUTION_MODE="host_ci"
+  fi
+else
+  EXECUTION_MODE="${EXECUTION_MODE,,}"
+fi
+
+if [[ -z "${RUNTIME_OS}" || -z "${RUNTIME_ARCH}" || -z "${RUNTIME_LIBC}" || -z "${EXECUTION_MODE}" ]]; then
+  echo "ERROR: runtime OS, architecture, libc and execution mode must be resolvable" >&2
   exit 1
 fi
 
@@ -196,7 +251,9 @@ python3 - \
   "${SOURCE_BRANCH}" \
   "${VERSION}" \
   "${RUNTIME_OS}" \
-  "${RUNTIME_ARCH}" <<'PY'
+  "${RUNTIME_ARCH}" \
+  "${RUNTIME_LIBC}" \
+  "${EXECUTION_MODE}" <<'PY'
 import hashlib
 import json
 import platform
@@ -207,7 +264,7 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 source_repo, source_commit, source_branch, version = sys.argv[2:6]
-runtime_os, runtime_arch = sys.argv[6:8]
+runtime_os, runtime_arch, runtime_libc, execution_mode = sys.argv[6:10]
 bin_dir = root / "bin"
 
 arch_order = [
@@ -221,6 +278,8 @@ runtime = {
     "os": runtime_os,
     "arch": runtime_arch,
     "abi": f"{runtime_os}-{runtime_arch}",
+    "libc": runtime_libc,
+    "execution_mode": execution_mode,
 }
 
 sha_map = {}
@@ -279,6 +338,6 @@ TARBALL="${OUT_DIR}/qemu-rafaelia-artifact-${SHORT_SHA}.tar.gz"
 tar -C "${OUT_DIR}" -czf "${TARBALL}" qemu-rafaelia-artifact
 
 echo "Artifact ready: ${TARBALL}"
-echo "Runtime ABI: ${RUNTIME_OS}-${RUNTIME_ARCH}"
+echo "Runtime: ${RUNTIME_OS}-${RUNTIME_ARCH} libc=${RUNTIME_LIBC} mode=${EXECUTION_MODE}"
 echo "Files:"
 find "${ARTIFACT_ROOT}" -maxdepth 2 -type f | sort
