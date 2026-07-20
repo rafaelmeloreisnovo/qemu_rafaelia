@@ -213,7 +213,7 @@ jobs:
             cross_file: android/cross-files/aarch64-linux-android-ndk.ini
             ndk_arch: aarch64
           - name: armeabi-v7a
-            triple: armv7a-linux-androideabi19
+            triple: armv7a-linux-androideabi21
             cross_file: android/cross-files/armv7a-linux-androideabi-ndk.ini
             ndk_arch: arm
 
@@ -263,7 +263,6 @@ jobs:
             --without-default-features \
             --disable-werror \
             --disable-docs \
-            --static \
             --extra-cflags="-DANDROID -fPIC" \
           || (cat build/config.log; exit 1)
 
