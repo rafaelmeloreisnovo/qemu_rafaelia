@@ -12,6 +12,9 @@ Validates:
   - SHA256SUMS.txt
   - at least one executable bin/qemu-system-*
   - JSON consistency and SHA256 integrity
+  - explicit runtime OS/architecture/ABI/libc/execution mode
+  - valid runtime combinations for host_ci, proot and native_android
+  - declared runtime architecture against executable file format
 USAGE
 }
 
@@ -87,6 +90,60 @@ if not qemu_exec.get("source_commit"):
 if qemu_exec.get("source_commit") != build_info.get("source_commit"):
     errors.append("source_commit mismatch")
 
+runtime = qemu_exec.get("runtime")
+build_runtime = build_info.get("runtime")
+if not isinstance(runtime, dict):
+    errors.append("qemu-exec.json runtime object is missing")
+    runtime = {}
+if runtime != build_runtime:
+    errors.append("runtime mismatch between qemu-exec.json and BUILD_INFO.json")
+
+runtime_os = str(runtime.get("os", "")).strip().lower()
+runtime_arch = str(runtime.get("arch", "")).strip().lower()
+runtime_abi = str(runtime.get("abi", "")).strip().lower()
+runtime_libc = str(runtime.get("libc", "")).strip().lower()
+execution_mode = str(runtime.get("execution_mode", "")).strip().lower()
+
+if not runtime_os:
+    errors.append("runtime.os is empty")
+if not runtime_arch:
+    errors.append("runtime.arch is empty")
+if runtime_abi != f"{runtime_os}-{runtime_arch}":
+    errors.append("runtime.abi must equal <runtime.os>-<runtime.arch>")
+if runtime_os not in {"linux", "android", "darwin", "windows"}:
+    errors.append(f"unsupported or ambiguous runtime.os: {runtime_os!r}")
+if runtime_arch not in {"x86_64", "i386", "aarch64", "arm", "riscv32", "riscv64"}:
+    errors.append(f"unsupported or ambiguous runtime.arch: {runtime_arch!r}")
+if runtime_libc not in {"glibc", "musl", "bionic", "none"}:
+    errors.append(f"unsupported or ambiguous runtime.libc: {runtime_libc!r}")
+if execution_mode not in {"host_ci", "proot", "native_android"}:
+    errors.append(f"unsupported execution_mode: {execution_mode!r}")
+
+# Execution mode is part of the security boundary. These combinations prevent
+# a host-CI binary from being consumed as a PRoot or native Android runtime.
+if execution_mode == "host_ci":
+    if runtime_os == "android":
+        errors.append("host_ci artifact must not declare runtime.os=android")
+elif execution_mode == "proot":
+    if runtime_os != "linux":
+        errors.append("proot artifact requires runtime.os=linux")
+    if runtime_libc not in {"glibc", "musl"}:
+        errors.append("proot artifact requires glibc or musl")
+    if runtime_arch not in {"aarch64", "arm", "x86_64", "i386"}:
+        errors.append("proot artifact uses unsupported runtime.arch")
+elif execution_mode == "native_android":
+    if runtime_os != "android":
+        errors.append("native_android artifact requires runtime.os=android")
+    if runtime_libc != "bionic":
+        errors.append("native_android artifact requires runtime.libc=bionic")
+    if runtime_arch not in {"aarch64", "arm", "x86_64", "i386"}:
+        errors.append("native_android artifact uses unsupported Android ABI architecture")
+
+if runtime_os == "android" and runtime_libc != "bionic":
+    errors.append("runtime.os=android requires runtime.libc=bionic")
+if runtime_os == "linux" and runtime_libc == "bionic":
+    errors.append("runtime.os=linux must not declare runtime.libc=bionic")
+
 binary_map = qemu_exec.get("binary", {})
 sha_map = qemu_exec.get("sha256", {})
 if not binary_map:
@@ -94,19 +151,54 @@ if not binary_map:
 if not sha_map:
     errors.append("qemu-exec.json sha256 map is empty")
 
-for arch, rel in binary_map.items():
+build_entries = {
+    entry.get("path"): entry
+    for entry in build_info.get("binaries", [])
+    if isinstance(entry, dict) and entry.get("path")
+}
+
+
+def format_matches_runtime(fmt: str, arch: str) -> bool:
+    value = fmt.lower()
+    if arch == "x86_64":
+        return "x86-64" in value or "x86_64" in value
+    if arch == "i386":
+        return "80386" in value or "intel 386" in value or "i386" in value
+    if arch == "aarch64":
+        return "aarch64" in value or "arm64" in value
+    if arch == "arm":
+        return "arm" in value and "aarch64" not in value and "arm64" not in value
+    if arch == "riscv32":
+        return "risc-v" in value and "32-bit" in value
+    if arch == "riscv64":
+        return "risc-v" in value and "64-bit" in value
+    return False
+
+
+for guest_arch, rel in binary_map.items():
     path = root / rel
     if not path.is_file():
-        errors.append(f"missing binary for {arch}: {rel}")
+        errors.append(f"missing binary for guest {guest_arch}: {rel}")
         continue
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if sha_map.get(rel) != digest:
         errors.append(f"sha mismatch for {rel}")
 
-build_paths = {entry.get("path") for entry in build_info.get("binaries", [])}
-for rel in binary_map.values():
-    if rel not in build_paths:
+    entry = build_entries.get(rel)
+    if entry is None:
         errors.append(f"BUILD_INFO missing binary path: {rel}")
+        continue
+    executable_format = str(entry.get("executable_format", "")).strip()
+    if not executable_format or executable_format.startswith("UNRESOLVED:"):
+        errors.append(f"unresolved executable format for {rel}: {executable_format!r}")
+    elif not format_matches_runtime(executable_format, runtime_arch):
+        errors.append(
+            f"runtime architecture {runtime_arch} does not match {rel}: {executable_format}"
+        )
+
+for rel in sha_map:
+    if rel not in build_entries:
+        errors.append(f"BUILD_INFO missing checksummed path: {rel}")
 
 if errors:
     for error in errors:
@@ -115,5 +207,8 @@ if errors:
 
 print("Producer artifact contract OK")
 print(f"source_commit={qemu_exec['source_commit']}")
-print("architectures=" + ",".join(sorted(binary_map)))
+print(f"runtime_abi={runtime_abi}")
+print(f"runtime_libc={runtime_libc}")
+print(f"execution_mode={execution_mode}")
+print("guest_architectures=" + ",".join(sorted(binary_map)))
 PY

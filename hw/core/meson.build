@@ -57,11 +57,19 @@ system_ss.add(files(
   'rafaelia-symbiosis.c',
 ))
 
-system_ss.add(when: ['TARGET_X86_64'], if_true: files('rafaelia-rmr-instr-x86.c'))
-system_ss.add(when: ['TARGET_I386'], if_true: files('rafaelia-rmr-instr-x86.c'))
-system_ss.add(when: 'TARGET_AARCH64', if_true: files('rafaelia-rmr-instr-arm64.c'))
-system_ss.add(when: ['TARGET_RISCV32'], if_true: files('rafaelia-rmr-instr-riscv.c'))
-system_ss.add(when: ['TARGET_RISCV64'], if_true: files('rafaelia-rmr-instr-riscv.c'))
+# The RMR instrument snapshot describes the host running QEMU, not the guest
+# architecture emulated by a qemu-system-* target. Keep this selection aligned
+# with the compiler built-ins used in rafaelia-rmr.c (__x86_64__, __aarch64__,
+# __riscv), otherwise a multi-target build can call a collector whose object was
+# omitted from that target's link.
+rafaelia_host_cpu = host_machine.cpu_family()
+if rafaelia_host_cpu in ['x86', 'x86_64']
+  system_ss.add(files('rafaelia-rmr-instr-x86.c'))
+elif rafaelia_host_cpu == 'aarch64'
+  system_ss.add(files('rafaelia-rmr-instr-arm64.c'))
+elif rafaelia_host_cpu in ['riscv32', 'riscv64']
+  system_ss.add(files('rafaelia-rmr-instr-riscv.c'))
+endif
 
 system_ss.add(files(
   'reset.c',

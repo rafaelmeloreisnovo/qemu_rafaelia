@@ -1,0 +1,119 @@
+name: Build PRoot ARM64 musl Artifact
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'hw/core/**'
+      - 'include/hw/core/**'
+      - 'tools/rafaelia/**'
+      - 'meson.build'
+      - 'configure'
+      - '.github/workflows/ci-build-proot-arm64.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-proot-arm64-musl:
+    # GitHub-hosted native ARM64 runner. Avoids compiling the complete QEMU tree
+    # through qemu-user emulation on an x86_64 runner.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify native ARM64 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "Linux"
+          test "$(uname -m)" = "aarch64"
+          docker version
+          printf 'runner_os=%s\nrunner_arch=%s\nuname=%s\n' \
+            "${RUNNER_OS}" \
+            "${RUNNER_ARCH}" \
+            "$(uname -a)" \
+            | tee native-arm64-runner.txt
+
+      - name: Verify ARM64 musl container runtime
+        run: |
+          docker run --rm alpine:3.22 sh -euxc '
+            test "$(uname -m)" = "aarch64"
+            ldd_output="$(ldd --version 2>&1 || true)"
+            printf "%s\n" "$ldd_output"
+            printf "%s\n" "$ldd_output" | grep -qi musl
+          '
+
+      - name: Build QEMU in native Alpine ARM64 musl userspace
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p dist/proot-arm64-diagnostics
+          cp native-arm64-runner.txt dist/proot-arm64-diagnostics/
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/src" \
+            -w /src \
+            alpine:3.22 \
+            sh -euxc '
+              apk add --no-cache \
+                bash \
+                build-base \
+                linux-headers \
+                python3 \
+                py3-packaging \
+                ninja \
+                meson \
+                pkgconf \
+                git \
+                file \
+                tar \
+                glib-dev \
+                pixman-dev \
+                zlib-dev \
+                dtc-dev \
+                capstone-dev \
+                libslirp-dev
+              git config --global --add safe.directory /src
+              bash tools/rafaelia/build_proot_arm64_musl.sh
+            ' 2>&1 | tee dist/proot-arm64-diagnostics/container-build.log
+
+      - name: Collect failed PRoot build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p dist/proot-arm64-diagnostics
+          cp -v build/config.log dist/proot-arm64-diagnostics/ 2>/dev/null || true
+          cp -v build/config-host.h dist/proot-arm64-diagnostics/ 2>/dev/null || true
+          cp -v build/meson-logs/meson-log.txt dist/proot-arm64-diagnostics/ 2>/dev/null || true
+          cp -v build/compile_commands.json dist/proot-arm64-diagnostics/ 2>/dev/null || true
+          tail -n 600 dist/proot-arm64-diagnostics/container-build.log \
+            > dist/proot-arm64-diagnostics/container-build-tail.log || true
+
+      - name: Upload PRoot ARM64 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-rafaelia-proot-arm64-musl-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/proot-arm64-diagnostics/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload PRoot ARM64 musl artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-rafaelia-proot-linux-aarch64-musl
+          path: dist/rafaelia-qemu-proot-arm64/qemu-rafaelia-artifact-*.tar.gz
+          if-no-files-found: error
+
+      - name: Upload PRoot ARM64 musl manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-rafaelia-proot-linux-aarch64-musl-manifest
+          path: |
+            dist/rafaelia-qemu-proot-arm64/qemu-rafaelia-artifact/qemu-exec.json
+            dist/rafaelia-qemu-proot-arm64/qemu-rafaelia-artifact/BUILD_INFO.json
+            dist/rafaelia-qemu-proot-arm64/qemu-rafaelia-artifact/SHA256SUMS.txt
+          if-no-files-found: error

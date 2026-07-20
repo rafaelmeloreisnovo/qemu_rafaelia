@@ -91,6 +91,7 @@ jobs:
             python3 \
             python3-pip \
             git \
+            file \
             libglib2.0-dev \
             libpixman-1-dev \
             zlib1g-dev \
@@ -98,8 +99,10 @@ jobs:
             libcapstone-dev \
             libslirp-dev
 
-      - name: Configure QEMU (multi-target)
+      - name: Configure QEMU (multi-target guests on Linux x86_64 host)
         run: |
+          test "$(uname -s)" = "Linux"
+          test "$(uname -m)" = "x86_64"
           ./configure \
             --target-list=x86_64-softmmu,aarch64-softmmu,i386-softmmu \
             --disable-werror \
@@ -112,40 +115,83 @@ jobs:
             --prefix=/usr/local
 
       - name: Build QEMU system targets
+        shell: bash
         run: |
-          ninja -C build qemu-system-x86_64 qemu-system-aarch64 qemu-system-i386
+          set -o pipefail
+          mkdir -p artifacts/build-diagnostics
+          printf 'commit=%s\nruntime_abi=%s\nruntime_libc=%s\nexecution_mode=%s\nguest_targets=%s\n' \
+            "${GITHUB_SHA}" \
+            'linux-x86_64' \
+            'glibc' \
+            'host_ci' \
+            'qemu-system-x86_64,qemu-system-aarch64,qemu-system-i386' \
+            > artifacts/build-diagnostics/BUILD_ATTEMPT.txt
+          ninja -C build -v \
+            qemu-system-x86_64 \
+            qemu-system-aarch64 \
+            qemu-system-i386 \
+            2>&1 | tee artifacts/build-diagnostics/qemu-system-build.log
         timeout-minutes: 45
+
+      - name: Collect failed-build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p artifacts/build-diagnostics
+          cp -v build/meson-logs/meson-log.txt artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/meson-logs/meson-info.json artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/config.log artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/config-host.h artifacts/build-diagnostics/ 2>/dev/null || true
+          cp -v build/compile_commands.json artifacts/build-diagnostics/ 2>/dev/null || true
+          find build -maxdepth 3 -type f \( -name '*.log' -o -name '*.ninja' \) \
+            -printf '%p\n' | sort > artifacts/build-diagnostics/AVAILABLE_DIAGNOSTICS.txt || true
+          tail -n 500 artifacts/build-diagnostics/qemu-system-build.log \
+            > artifacts/build-diagnostics/qemu-system-build-tail.log || true
+
+      - name: Upload failed-build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-binary-build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/build-diagnostics/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Verify binaries exist
         run: |
           for bin in build/qemu-system-x86_64 build/qemu-system-aarch64 build/qemu-system-i386; do
             test -x "${bin}" && echo "OK: ${bin}" || (echo "MISSING: ${bin}" && exit 1)
+            file "${bin}"
           done
 
-      - name: Package RAFAELIA artifact
+      - name: Package RAFAELIA Linux host artifact
         run: |
           bash tools/rafaelia/package_qemu_artifact.sh \
             --build-dir build \
-            --out-dir dist/rafaelia-qemu
+            --out-dir dist/rafaelia-qemu \
+            --runtime-os linux \
+            --runtime-arch x86_64 \
+            --runtime-libc glibc \
+            --execution-mode host_ci
 
       - name: Verify artifact contract
         run: |
           bash tools/rafaelia/check_qemu_artifact_contract.sh \
             --artifact-root dist/rafaelia-qemu/qemu-rafaelia-artifact
 
-      - name: Upload RAFAELIA artifact tarball
+      - name: Upload RAFAELIA Linux x86_64 artifact tarball
         uses: actions/upload-artifact@v4
         with:
-          name: qemu-rafaelia-artifact
+          name: qemu-rafaelia-linux-x86_64-glibc-host-ci
           path: dist/rafaelia-qemu/qemu-rafaelia-artifact-*.tar.gz
           if-no-files-found: error
 
-      - name: Upload artifact manifest
+      - name: Upload Linux x86_64 artifact manifest
         uses: actions/upload-artifact@v4
         with:
-          name: qemu-rafaelia-manifest
+          name: qemu-rafaelia-linux-x86_64-glibc-manifest
           path: |
             dist/rafaelia-qemu/qemu-rafaelia-artifact/qemu-exec.json
             dist/rafaelia-qemu/qemu-rafaelia-artifact/BUILD_INFO.json
             dist/rafaelia-qemu/qemu-rafaelia-artifact/SHA256SUMS.txt
-          if-no-files-found: warn
+          if-no-files-found: error

@@ -3,15 +3,28 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: tools/rafaelia/package_qemu_artifact.sh [--build-dir DIR] [--out-dir DIR] [--source-repo OWNER/REPO] [--version VERSION] [--allow-missing]
+Usage: tools/rafaelia/package_qemu_artifact.sh [options]
 
-Packages built qemu-system-* binaries into a deterministic RAFAELIA artifact:
+Options:
+  --build-dir DIR
+  --out-dir DIR
+  --source-repo OWNER/REPO
+  --version VERSION
+  --runtime-os OS          Runtime OS of packaged executables
+  --runtime-arch ARCH      Runtime CPU architecture
+  --runtime-libc LIBC      glibc, musl, bionic or none
+  --execution-mode MODE    host_ci, proot or native_android
+  --allow-missing
+
+Packages built qemu-system-* binaries into a RAFAELIA artifact:
   - qemu-exec.json
   - BUILD_INFO.json
   - SHA256SUMS.txt
   - qemu-rafaelia-artifact-<short-sha>.tar.gz
 
-The script does not build QEMU. It only packages binaries already produced by a QEMU build.
+The script does not build QEMU. It packages binaries already produced by a QEMU build.
+For cross builds, runtime OS, architecture, libc and execution mode must describe the
+produced executables, not the runner that invoked this script.
 USAGE
 }
 
@@ -19,6 +32,10 @@ BUILD_DIR="build"
 OUT_DIR="dist/rafaelia-qemu"
 SOURCE_REPO="rafaelmeloreisnovo/qemu_rafaelia"
 VERSION=""
+RUNTIME_OS=""
+RUNTIME_ARCH=""
+RUNTIME_LIBC=""
+EXECUTION_MODE=""
 ALLOW_MISSING="false"
 
 while [[ $# -gt 0 ]]; do
@@ -37,6 +54,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --version)
       VERSION="$2"
+      shift 2
+      ;;
+    --runtime-os)
+      RUNTIME_OS="$2"
+      shift 2
+      ;;
+    --runtime-arch)
+      RUNTIME_ARCH="$2"
+      shift 2
+      ;;
+    --runtime-libc)
+      RUNTIME_LIBC="$2"
+      shift 2
+      ;;
+    --execution-mode)
+      EXECUTION_MODE="$2"
       shift 2
       ;;
     --allow-missing)
@@ -63,13 +96,92 @@ if [[ -z "${VERSION}" ]]; then
   fi
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "ERROR: python3 is required to generate JSON manifests" >&2
-  exit 1
+for cmd in python3 sha256sum file; do
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "ERROR: ${cmd} is required" >&2
+    exit 1
+  fi
+done
+
+normalize_os() {
+  local value="${1,,}"
+  case "${value}" in
+    linux|gnu/linux) echo "linux" ;;
+    android) echo "android" ;;
+    darwin|macos|macosx) echo "darwin" ;;
+    windows|mingw*|msys*) echo "windows" ;;
+    *) echo "${value}" ;;
+  esac
+}
+
+normalize_arch() {
+  local value="${1,,}"
+  case "${value}" in
+    amd64|x64|x86-64) echo "x86_64" ;;
+    arm64|arm64-v8a) echo "aarch64" ;;
+    armeabi-v7a|armv7|armv7l|armhf) echo "arm" ;;
+    x86|i686|i386) echo "i386" ;;
+    *) echo "${value}" ;;
+  esac
+}
+
+normalize_libc() {
+  local value="${1,,}"
+  case "${value}" in
+    gnu|gnu-libc|glibc) echo "glibc" ;;
+    musl) echo "musl" ;;
+    android|bionic) echo "bionic" ;;
+    none|static) echo "none" ;;
+    *) echo "${value}" ;;
+  esac
+}
+
+detect_libc() {
+  if [[ "${RUNTIME_OS}" == "android" ]]; then
+    echo "bionic"
+    return
+  fi
+  if command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+    echo "glibc"
+    return
+  fi
+  if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
+    echo "musl"
+    return
+  fi
+  echo ""
+}
+
+if [[ -z "${RUNTIME_OS}" ]]; then
+  RUNTIME_OS="$(normalize_os "$(uname -s)")"
+else
+  RUNTIME_OS="$(normalize_os "${RUNTIME_OS}")"
 fi
 
-if ! command -v sha256sum >/dev/null 2>&1; then
-  echo "ERROR: sha256sum is required" >&2
+if [[ -z "${RUNTIME_ARCH}" ]]; then
+  RUNTIME_ARCH="$(normalize_arch "$(uname -m)")"
+else
+  RUNTIME_ARCH="$(normalize_arch "${RUNTIME_ARCH}")"
+fi
+
+if [[ -z "${RUNTIME_LIBC}" ]]; then
+  RUNTIME_LIBC="$(detect_libc)"
+else
+  RUNTIME_LIBC="$(normalize_libc "${RUNTIME_LIBC}")"
+fi
+
+if [[ -z "${EXECUTION_MODE}" ]]; then
+  if [[ "${RUNTIME_OS}" == "android" ]]; then
+    EXECUTION_MODE="native_android"
+  else
+    EXECUTION_MODE="host_ci"
+  fi
+else
+  EXECUTION_MODE="${EXECUTION_MODE,,}"
+fi
+
+if [[ -z "${RUNTIME_OS}" || -z "${RUNTIME_ARCH}" || -z "${RUNTIME_LIBC}" || -z "${EXECUTION_MODE}" ]]; then
+  echo "ERROR: runtime OS, architecture, libc and execution mode must be resolvable" >&2
   exit 1
 fi
 
@@ -129,20 +241,30 @@ fi
 
 (
   cd "${ARTIFACT_ROOT}"
-  find bin -type f -maxdepth 1 -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS.txt
+  find bin -maxdepth 1 -type f -print0 | sort -z | xargs -0 -r sha256sum > SHA256SUMS.txt
 )
 
-python3 - "${ARTIFACT_ROOT}" "${SOURCE_REPO}" "${SOURCE_COMMIT}" "${SOURCE_BRANCH}" "${VERSION}" <<'PY'
+python3 - \
+  "${ARTIFACT_ROOT}" \
+  "${SOURCE_REPO}" \
+  "${SOURCE_COMMIT}" \
+  "${SOURCE_BRANCH}" \
+  "${VERSION}" \
+  "${RUNTIME_OS}" \
+  "${RUNTIME_ARCH}" \
+  "${RUNTIME_LIBC}" \
+  "${EXECUTION_MODE}" <<'PY'
 import hashlib
 import json
-import os
 import platform
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 root = Path(sys.argv[1])
 source_repo, source_commit, source_branch, version = sys.argv[2:6]
+runtime_os, runtime_arch, runtime_libc, execution_mode = sys.argv[6:10]
 bin_dir = root / "bin"
 
 arch_order = [
@@ -152,26 +274,46 @@ arch_order = [
     ("ppc", ["qemu-system-ppc-rafacodephi", "qemu-system-ppc-rafaelia", "qemu-system-ppc"]),
 ]
 
+runtime = {
+    "os": runtime_os,
+    "arch": runtime_arch,
+    "abi": f"{runtime_os}-{runtime_arch}",
+    "libc": runtime_libc,
+    "execution_mode": execution_mode,
+}
+
 sha_map = {}
 binaries = []
 for path in sorted(bin_dir.glob("qemu-system-*")):
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     rel = path.relative_to(root).as_posix()
+    try:
+        executable_format = subprocess.check_output(
+            ["file", "-b", str(path)], text=True, stderr=subprocess.STDOUT
+        ).strip()
+    except Exception as exc:
+        executable_format = f"UNRESOLVED:{type(exc).__name__}"
     sha_map[rel] = digest
-    binaries.append({"path": rel, "sha256": digest, "size_bytes": path.stat().st_size})
+    binaries.append({
+        "path": rel,
+        "sha256": digest,
+        "size_bytes": path.stat().st_size,
+        "executable_format": executable_format,
+    })
 
 binary_map = {}
-for arch, names in arch_order:
+for guest_arch, names in arch_order:
     for name in names:
         rel = f"bin/{name}"
         if rel in sha_map:
-            binary_map[arch] = rel
+            binary_map[guest_arch] = rel
             break
 
 qemu_exec = {
     "source_repo": source_repo,
     "source_commit": source_commit,
     "version": version,
+    "runtime": runtime,
     "binary": binary_map,
     "sha256": sha_map,
 }
@@ -182,7 +324,8 @@ build_info = {
     "source_branch": source_branch,
     "qemu_version": version,
     "built_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-    "host": platform.platform(),
+    "build_runner": platform.platform(),
+    "runtime": runtime,
     "binaries": binaries,
 }
 
@@ -195,5 +338,6 @@ TARBALL="${OUT_DIR}/qemu-rafaelia-artifact-${SHORT_SHA}.tar.gz"
 tar -C "${OUT_DIR}" -czf "${TARBALL}" qemu-rafaelia-artifact
 
 echo "Artifact ready: ${TARBALL}"
+echo "Runtime: ${RUNTIME_OS}-${RUNTIME_ARCH} libc=${RUNTIME_LIBC} mode=${EXECUTION_MODE}"
 echo "Files:"
 find "${ARTIFACT_ROOT}" -maxdepth 2 -type f | sort
