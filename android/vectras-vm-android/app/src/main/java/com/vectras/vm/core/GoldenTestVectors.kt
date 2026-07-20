@@ -182,26 +182,26 @@ object GoldenTestVectors {
     val ROTATE_VECTORS = listOf(
         RotateVector(
             0x0000000000000001L, 1,
-            0x0000000000000002L, -0x8000000000000000L,
+            0x0000000000000002L, Long.MIN_VALUE,
             "Rotate 1 by 1 bit"
         ),
         RotateVector(
-            0x8000000000000000L, 1,
+            Long.MIN_VALUE, 1,
             0x0000000000000001L, 0x4000000000000000L,
             "Rotate MSB by 1 bit"
         ),
         RotateVector(
-            0xABCDEF0123456789L, 4,
-            0xBCDEF0123456789AL, 0x9ABCDEF012345678L,
+            0xABCDEF0123456789UL.toLong(), 4,
+            0xBCDEF0123456789AUL.toLong(), 0x9ABCDEF012345678UL.toLong(),
             "Rotate by 4 bits"
         ),
         RotateVector(
-            0xABCDEF0123456789L, 8,
-            0xCDEF0123456789ABL, 0x89ABCDEF01234567L,
+            0xABCDEF0123456789UL.toLong(), 8,
+            0xCDEF0123456789ABUL.toLong(), 0x89ABCDEF01234567UL.toLong(),
             "Rotate by 8 bits"
         ),
         RotateVector(
-            0xABCDEF0123456789L, 32,
+            0xABCDEF0123456789UL.toLong(), 32,
             0x23456789ABCDEF01L, 0x23456789ABCDEF01L,
             "Rotate by 32 bits (half)"
         ),
@@ -239,7 +239,7 @@ object GoldenTestVectors {
         PopCountVector(0xFFFFFFFFL, 32, "popcount(0xFFFFFFFF) = 32"),
         PopCountVector(-1L, 64, "popcount(-1) = 64 (all bits set)"),
         PopCountVector(0x5555555555555555L, 32, "popcount(alternating bits) = 32"),
-        PopCountVector(0xAAAAAAAAAAAAAAAAL, 32, "popcount(alternating bits) = 32"),
+        PopCountVector(0xAAAAAAAAAAAAAAAAUL.toLong(), 32, "popcount(alternating bits) = 32"),
         PopCountVector(0x0123456789ABCDEFL, 32, "popcount(0x0123456789ABCDEF) = 32")
     )
 
