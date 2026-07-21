@@ -88,8 +88,8 @@ object MathUtils {
         if (value == 0L) return 0
         if (value == 1L) return 1
         
-        // Initial estimate using log2
-        var x = 1L shl ((log2Int(value) + 1) / 2)
+        // Initial estimate: 2^ceil(bits/2) — always >= sqrt(value), so N-R converges from above
+        var x = 1L shl ((log2Int(value) + 2) / 2)
         
         // Newton-Raphson iteration
         var prev: Long

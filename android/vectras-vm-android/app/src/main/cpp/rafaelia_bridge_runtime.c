@@ -24,7 +24,6 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
-#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -237,38 +236,31 @@ bool rafaelia_bridge_start_vm(const char *vm_id)
     for (int i = 0; i < arg_count; i++) spawn_argv[i + 1] = vm_argv[i];
     spawn_argv[arg_count + 1] = NULL;
 
-    /* Inherit environment from the current process */
-    extern char **environ;
-
-    posix_spawn_file_actions_t file_actions;
-    posix_spawn_file_actions_init(&file_actions);
-    /* Redirect stdout/stderr to logcat via /dev/null (Android logging happens
-     * through __android_log_print; no PTY needed at this layer) */
-    posix_spawn_file_actions_addopen(&file_actions, STDOUT_FILENO,
-                                     "/dev/null", O_WRONLY, 0);
-    posix_spawn_file_actions_addopen(&file_actions, STDERR_FILENO,
-                                     "/dev/null", O_WRONLY, 0);
-
-    posix_spawnattr_t attr;
-    posix_spawnattr_init(&attr);
-    /* Reset signal mask so QEMU is not blocked by parent mask */
-    sigset_t empty;
-    sigemptyset(&empty);
-    posix_spawnattr_setsigmask(&attr, &empty);
-    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);
-
-    pid_t pid = -1;
-    int rc = posix_spawn(&pid, qemu_bin, &file_actions, &attr, spawn_argv, environ);
-
-    posix_spawnattr_destroy(&attr);
-    posix_spawn_file_actions_destroy(&file_actions);
-    for (int i = 0; i < arg_count; i++) { free(vm_argv[i]); vm_argv[i] = NULL; }
-
-    if (rc != 0) {
-        LOGE("start_vm: posix_spawn failed: %s (rc=%d)", strerror(rc), rc);
+    /* fork+exec: compatible with Android API 21+ (posix_spawn requires API 28) */
+    pid_t pid = fork();
+    if (pid < 0) {
+        LOGE("start_vm: fork failed: %s", strerror(errno));
+        for (int i = 0; i < arg_count; i++) { free(vm_argv[i]); vm_argv[i] = NULL; }
         pthread_mutex_unlock(&g_lock);
         return false;
     }
+    if (pid == 0) {
+        /* Child: redirect stdout/stderr to /dev/null, reset signal mask, exec QEMU */
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        sigset_t empty;
+        sigemptyset(&empty);
+        sigprocmask(SIG_SETMASK, &empty, NULL);
+        execv(qemu_bin, spawn_argv);
+        /* execv only returns on error */
+        _exit(127);
+    }
+
+    for (int i = 0; i < arg_count; i++) { free(vm_argv[i]); vm_argv[i] = NULL; }
 
     LOGI("start_vm: launched pid=%d", (int)pid);
     g_qemu_pid      = pid;

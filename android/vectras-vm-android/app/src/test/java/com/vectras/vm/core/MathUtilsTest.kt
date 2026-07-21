@@ -9,6 +9,7 @@
 package com.vectras.vm.core
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
 import kotlin.math.abs
 
@@ -66,8 +67,8 @@ class MathUtilsTest {
     fun `log2Int validates against all golden vectors`() {
         for (vector in GoldenTestVectors.LOG2_INT_VECTORS) {
             val result = MathUtils.log2Int(vector.input)
-            assertThat(result)
-                .named("${vector.description}: log2Int(${vector.input})")
+            assertWithMessage("${vector.description}: log2Int(${vector.input})")
+                .that(result)
                 .isEqualTo(vector.expected)
         }
     }
@@ -142,8 +143,8 @@ class MathUtilsTest {
     fun `sqrtInt validates against all golden vectors`() {
         for (vector in GoldenTestVectors.SQRT_INT_VECTORS) {
             val result = MathUtils.sqrtInt(vector.input)
-            assertThat(result)
-                .named("${vector.description}: sqrtInt(${vector.input})")
+            assertWithMessage("${vector.description}: sqrtInt(${vector.input})")
+                .that(result)
                 .isEqualTo(vector.expected)
         }
     }
@@ -168,8 +169,8 @@ class MathUtilsTest {
     fun `crc32 validates against all golden vectors`() {
         for (vector in GoldenTestVectors.CRC32_VECTORS) {
             val result = MathUtils.crc32(vector.input)
-            assertThat(result)
-                .named("${vector.description}")
+            assertWithMessage("${vector.description}")
+                .that(result)
                 .isEqualTo(vector.expected)
         }
     }
@@ -182,15 +183,15 @@ class MathUtilsTest {
     fun `rotateLeft rotates bits correctly`() {
         assertThat(MathUtils.rotateLeft(0x0000000000000001L, 1))
             .isEqualTo(0x0000000000000002L)
-        assertThat(MathUtils.rotateLeft(0x8000000000000000L, 1))
+        assertThat(MathUtils.rotateLeft(Long.MIN_VALUE, 1))
             .isEqualTo(0x0000000000000001L)
     }
 
     @Test
     fun `rotateRight rotates bits correctly`() {
         assertThat(MathUtils.rotateRight(0x0000000000000001L, 1))
-            .isEqualTo(-0x8000000000000000L)
-        assertThat(MathUtils.rotateRight(0x8000000000000000L, 1))
+            .isEqualTo(Long.MIN_VALUE)
+        assertThat(MathUtils.rotateRight(Long.MIN_VALUE, 1))
             .isEqualTo(0x4000000000000000L)
     }
 
@@ -213,12 +214,12 @@ class MathUtilsTest {
         for (vector in GoldenTestVectors.ROTATE_VECTORS) {
             val leftResult = MathUtils.rotateLeft(vector.input, vector.bits)
             val rightResult = MathUtils.rotateRight(vector.input, vector.bits)
-            
-            assertThat(leftResult)
-                .named("${vector.description}: rotateLeft")
+
+            assertWithMessage("${vector.description}: rotateLeft")
+                .that(leftResult)
                 .isEqualTo(vector.expectedLeft)
-            assertThat(rightResult)
-                .named("${vector.description}: rotateRight")
+            assertWithMessage("${vector.description}: rotateRight")
+                .that(rightResult)
                 .isEqualTo(vector.expectedRight)
         }
     }
@@ -243,8 +244,8 @@ class MathUtilsTest {
     fun `popCount validates against all golden vectors`() {
         for (vector in GoldenTestVectors.POPCOUNT_VECTORS) {
             val result = MathUtils.popCount(vector.input)
-            assertThat(result)
-                .named("${vector.description}")
+            assertWithMessage("${vector.description}")
+                .that(result)
                 .isEqualTo(vector.expected)
         }
     }
@@ -278,8 +279,8 @@ class MathUtilsTest {
     fun `isPowerOfTwo validates against all golden vectors`() {
         for (vector in GoldenTestVectors.POWER_OF_TWO_VECTORS) {
             val result = MathUtils.isPowerOfTwo(vector.input)
-            assertThat(result)
-                .named("${vector.description}")
+            assertWithMessage("${vector.description}")
+                .that(result)
                 .isEqualTo(vector.expected)
         }
     }
@@ -361,9 +362,9 @@ class MathUtilsTest {
                 "SQRT2 (sqrt(2))" -> MathUtils.SQRT2
                 else -> throw IllegalArgumentException("Unknown constant: ${vector.name}")
             }
-            
-            assertThat(abs(actualValue - vector.expectedValue))
-                .named("${vector.name}: ${vector.formula}")
+
+            assertWithMessage("${vector.name}: ${vector.formula}")
+                .that(abs(actualValue - vector.expectedValue))
                 .isLessThan(vector.tolerance)
         }
     }
