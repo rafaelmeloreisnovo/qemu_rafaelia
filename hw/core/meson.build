@@ -48,6 +48,7 @@ system_ss.add(files(
   'connectors/magisk-connector.c',
   'connectors/private-connector.c',
   'connectors/userland-connector.c',
+  'connectors/rafaelia-connector-numbase.c',
   'rafaelia-integration-hub.c',
   'rafaelia-lowlevel.c',
   'rafaelia-qemu-shell.c',
