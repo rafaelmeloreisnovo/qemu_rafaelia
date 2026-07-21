@@ -23,6 +23,7 @@
 #include "hw/core/rafaelia-connector-ipc.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
