@@ -61,6 +61,7 @@ Upload via `actions/upload-artifact@v4` com nome `qemu-smoke-build-artifacts`.
 
 ## 5) Organização documental
 
+- Auditoria canônica de divergência, ciclo, monitor e fronteira com o cache Vectras: `docs/RAFAELIA_QEMU_DIVERGENCE_AUDIT_2026-07-24.md`
 - Documento técnico principal: `docs/RAFAELIA_TECHNICAL_DOCUMENTATION.md`
 - Dossiê executivo/profissional: `docs/RAFAELIA_PROFESSIONAL_DOSSIER.md`
 - Auditoria de árvore e cobertura: `docs/RAFAELIA_DIRECTORY_AUDIT.md`
@@ -71,3 +72,4 @@ Upload via `actions/upload-artifact@v4` com nome `qemu-smoke-build-artifacts`.
 2. Não declarar release path sem upload de artefato configurado.
 3. Não divergir doc de workflow: **workflow manda, doc explica**.
 4. Corrigir causa-raiz estrutural antes de ajustar texto superficial.
+5. Distinguir ciclo de runtime, instrumentação e cache; nenhum deles prova performance sem benchmark.
