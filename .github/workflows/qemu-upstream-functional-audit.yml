@@ -127,15 +127,24 @@ jobs:
           python3 tools/rafaelia/audit_qemu_upstream.py \
             --upstream-ref "${UPSTREAM_REF}" \
             --skip-fetch \
-            --fail-on-whitespace \
             --out-dir "${AUDIT_DIR}" \
             --observation integration_self_test="${INTEGRATION_OBSERVATION}" \
             --observation qemu_system_binary="${QEMU_SYSTEM_OBSERVATION}"
 
-      - name: Fail closed when executable proof is incomplete
-        if: ${{ steps.integration_test.outcome != 'success' || steps.qemu_system.outcome != 'success' }}
+      - name: Check upstream delta whitespace
+        id: delta_whitespace
+        continue-on-error: true
+        shell: bash
         run: |
-          echo "QEMU functional evidence is incomplete; inspect the uploaded audit artifact."
+          set -euo pipefail
+          remote_ref="audit-upstream-qemu/${UPSTREAM_REF}"
+          merge_base="$(git merge-base HEAD "${remote_ref}")"
+          git diff --check "${merge_base}" HEAD
+
+      - name: Fail closed when executable proof or delta integrity is incomplete
+        if: ${{ steps.integration_test.outcome != 'success' || steps.qemu_system.outcome != 'success' || steps.delta_whitespace.outcome != 'success' }}
+        run: |
+          echo "QEMU functional evidence or upstream-delta whitespace policy is incomplete; inspect the uploaded audit artifact."
           exit 1
 
       - name: Upload upstream delta and functional evidence
