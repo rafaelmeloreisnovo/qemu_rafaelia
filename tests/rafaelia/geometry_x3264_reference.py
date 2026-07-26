@@ -38,6 +38,10 @@ def transpose(a):
     return tuple(tuple(a[j][i] for j in range(2)) for i in range(2))
 
 
+def determinant(a):
+    return a[0][0] * a[1][1] - a[0][1] * a[1][0]
+
+
 def norm2(v):
     return v[0] * v[0] + v[1] * v[1]
 
@@ -72,6 +76,8 @@ def verify():
     checks = {
         "scaled_orthogonality_plus": mul(transpose(T_PLUS), T_PLUS) == half_i,
         "scaled_orthogonality_minus": mul(transpose(T_MINUS), T_MINUS) == half_i,
+        "determinant_plus_half": determinant(T_PLUS) == F(1, 2),
+        "determinant_minus_half": determinant(T_MINUS) == F(1, 2),
         "opposite_pair_half_identity": mul(T_PLUS, T_MINUS) == half_i,
         "midpoint_contact_plus": {vec(T_PLUS, v) for v in vertices} == midpoints,
         "midpoint_contact_minus": {vec(T_MINUS, v) for v in vertices} == midpoints,
