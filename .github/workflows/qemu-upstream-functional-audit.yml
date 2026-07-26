@@ -59,12 +59,18 @@ jobs:
     timeout-minutes: 50
     env:
       UPSTREAM_REF: ${{ inputs.upstream_ref || 'master' }}
-      AUDIT_DIR: ${{ runner.temp }}/qemu-upstream-audit
     steps:
       - name: Checkout complete history for merge-base analysis
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Initialize audit workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/qemu-upstream-audit"
+          printf 'AUDIT_DIR=%s\n' "${RUNNER_TEMP}/qemu-upstream-audit" >> "${GITHUB_ENV}"
 
       - name: Install QEMU build dependencies
         run: |
