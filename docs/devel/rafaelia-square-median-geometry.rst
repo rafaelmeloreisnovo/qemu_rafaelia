@@ -83,6 +83,7 @@ are fail-closed:
    2  norm/area progression failed
    3  opposite-rotation composition failed
    4  eight-step orientation cycle failed
+   5  determinant/area scaling failed
    90 unsupported pointer width
 
 ``tests/rafaelia/geometry_x3264_reference.py`` provides an independent exact
