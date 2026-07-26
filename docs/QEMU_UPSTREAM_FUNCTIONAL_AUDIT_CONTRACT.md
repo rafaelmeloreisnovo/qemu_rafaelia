@@ -65,5 +65,9 @@ review-required QEMU subsystem differs: that result needs a reviewer to inspect
 the recorded diff and decide whether a new test, benchmark, or design review is
 required.
 
+When an executable stage fails, the workflow still writes and uploads the
+corresponding `FAILED_IN_CI` observation before failing closed. This preserves
+the evidence rather than replacing it with an opaque red job.
+
 License and distribution decisions stay outside this CI contract. The audit
 preserves source evidence and does not combine or re-license external projects.
