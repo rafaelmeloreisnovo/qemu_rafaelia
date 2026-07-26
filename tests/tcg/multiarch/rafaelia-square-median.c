@@ -30,6 +30,14 @@ static unsigned long norm_num(struct vec2 v)
     return (unsigned long)(v.x * v.x + v.y * v.y);
 }
 
+static int determinant_area(void)
+{
+    /* det(M+) = det(M-) = 2; division by 2 on both axes gives det(T)=1/2. */
+    const long det_plus = 1 * 1 - (-1) * 1;
+    const long det_minus = 1 * 1 - 1 * (-1);
+    return det_plus == 2 && det_minus == 2;
+}
+
 static int midpoint_contact(void)
 {
     const long a = 256;
@@ -108,6 +116,9 @@ int main(void)
     }
     if (!eight_step_cycle()) {
         return 4;
+    }
+    if (!determinant_area()) {
+        return 5;
     }
     return 0;
 }
