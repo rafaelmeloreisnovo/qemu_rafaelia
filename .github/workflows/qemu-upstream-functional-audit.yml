@@ -1,0 +1,128 @@
+name: QEMU upstream functional audit
+
+on:
+  pull_request:
+    paths:
+      - "accel/tcg/**"
+      - "android/**"
+      - "block/**"
+      - "docs/QEMU_UPSTREAM_FUNCTIONAL_AUDIT_CONTRACT.md"
+      - "hw/core/**"
+      - "include/hw/core/**"
+      - "include/tcg/**"
+      - "migration/**"
+      - "monitor/**"
+      - "qapi/**"
+      - "qemu-options.hx"
+      - "system/**"
+      - "target/**"
+      - "tools/rafaelia/**"
+      - ".github/workflows/qemu-upstream-functional-audit.yml"
+  push:
+    branches: ["master"]
+    paths:
+      - "accel/tcg/**"
+      - "android/**"
+      - "block/**"
+      - "docs/QEMU_UPSTREAM_FUNCTIONAL_AUDIT_CONTRACT.md"
+      - "hw/core/**"
+      - "include/hw/core/**"
+      - "include/tcg/**"
+      - "migration/**"
+      - "monitor/**"
+      - "qapi/**"
+      - "qemu-options.hx"
+      - "system/**"
+      - "target/**"
+      - "tools/rafaelia/**"
+      - ".github/workflows/qemu-upstream-functional-audit.yml"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "QEMU upstream branch or tag to compare"
+        required: false
+        default: "master"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qemu-upstream-functional-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit-and-functional-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      UPSTREAM_REF: ${{ inputs.upstream_ref || 'master' }}
+      AUDIT_DIR: ${{ runner.temp }}/qemu-upstream-audit
+    steps:
+      - name: Checkout complete history for merge-base analysis
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install QEMU build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            git \
+            libcapstone-dev \
+            libfdt-dev \
+            libglib2.0-dev \
+            libpixman-1-dev \
+            libslirp-dev \
+            ninja-build \
+            pkg-config \
+            python3 \
+            zlib1g-dev
+
+      - name: Compare RAFAELIA tree with QEMU upstream
+        run: |
+          python3 tools/rafaelia/audit_qemu_upstream.py \
+            --upstream-ref "${UPSTREAM_REF}" \
+            --out-dir "${AUDIT_DIR}"
+
+      - name: Build and execute the RAFAELIA integration test
+        run: |
+          make -C hw/core -f Makefile.integration all
+          make -C hw/core -f Makefile.integration test
+
+      - name: Build a QEMU system executable from the audited tree
+        run: |
+          ./configure \
+            --target-list=x86_64-softmmu \
+            --disable-werror \
+            --disable-docs \
+            --disable-gtk \
+            --disable-sdl \
+            --disable-curses \
+            --disable-vnc-jpeg \
+            --disable-spice
+          ninja -C build qemu-system-x86_64
+          build/qemu-system-x86_64 --version > "${AUDIT_DIR}/qemu-system-x86_64.version.txt"
+
+      - name: Record successful executable observations in the audit
+        run: |
+          python3 tools/rafaelia/audit_qemu_upstream.py \
+            --upstream-ref "${UPSTREAM_REF}" \
+            --skip-fetch \
+            --fail-on-whitespace \
+            --out-dir "${AUDIT_DIR}" \
+            --observation integration_self_test=PASSED \
+            --observation qemu_system_binary=PASSED
+
+      - name: Upload upstream delta and functional evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-upstream-functional-audit-${{ github.sha }}
+          path: ${{ runner.temp }}/qemu-upstream-audit/
+          if-no-files-found: warn
+          retention-days: 30
