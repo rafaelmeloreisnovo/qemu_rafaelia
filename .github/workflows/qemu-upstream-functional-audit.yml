@@ -41,7 +41,7 @@ on:
   workflow_dispatch:
     inputs:
       upstream_ref:
-        description: "QEMU upstream branch or tag to compare"
+        description: "QEMU upstream branch to compare"
         required: false
         default: "master"
         type: string
