@@ -90,11 +90,15 @@ jobs:
             --out-dir "${AUDIT_DIR}"
 
       - name: Build and execute the RAFAELIA integration test
+        id: integration_test
+        continue-on-error: true
         run: |
           make -C hw/core -f Makefile.integration all
           make -C hw/core -f Makefile.integration test
 
       - name: Build a QEMU system executable from the audited tree
+        id: qemu_system
+        continue-on-error: true
         run: |
           ./configure \
             --target-list=x86_64-softmmu \
@@ -109,14 +113,24 @@ jobs:
           build/qemu-system-x86_64 --version > "${AUDIT_DIR}/qemu-system-x86_64.version.txt"
 
       - name: Record successful executable observations in the audit
+        if: always()
+        env:
+          INTEGRATION_OBSERVATION: ${{ steps.integration_test.outcome == 'success' && 'PASSED' || 'FAILED' }}
+          QEMU_SYSTEM_OBSERVATION: ${{ steps.qemu_system.outcome == 'success' && 'PASSED' || 'FAILED' }}
         run: |
           python3 tools/rafaelia/audit_qemu_upstream.py \
             --upstream-ref "${UPSTREAM_REF}" \
             --skip-fetch \
             --fail-on-whitespace \
             --out-dir "${AUDIT_DIR}" \
-            --observation integration_self_test=PASSED \
-            --observation qemu_system_binary=PASSED
+            --observation integration_self_test="${INTEGRATION_OBSERVATION}" \
+            --observation qemu_system_binary="${QEMU_SYSTEM_OBSERVATION}"
+
+      - name: Fail closed when executable proof is incomplete
+        if: ${{ steps.integration_test.outcome != 'success' || steps.qemu_system.outcome != 'success' }}
+        run: |
+          echo "QEMU functional evidence is incomplete; inspect the uploaded audit artifact."
+          exit 1
 
       - name: Upload upstream delta and functional evidence
         if: always()
