@@ -19,7 +19,7 @@ on:
       - "tools/rafaelia/**"
       - ".github/workflows/qemu-upstream-functional-audit.yml"
   push:
-    branches: ["master"]
+    branches: ["**"]
     paths:
       - "accel/tcg/**"
       - "android/**"
