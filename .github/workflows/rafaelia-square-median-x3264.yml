@@ -1,0 +1,174 @@
+name: RAFAELIA Square Median x32 x64
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "tests/tcg/multiarch/rafaelia-square-median.c"
+      - "tests/rafaelia/geometry_x3264_reference.py"
+      - "docs/devel/rafaelia-square-median-geometry.rst"
+      - ".github/workflows/rafaelia-square-median-x3264.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rafaelia-square-median-x3264-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-reference-and-abi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Exact rational reference model
+        run: |
+          mkdir -p artifacts/rafaelia-square-median
+          python3 tests/rafaelia/geometry_x3264_reference.py \
+            --output artifacts/rafaelia-square-median/reference.json
+
+      - name: Build and run native x86-64 kernel
+        run: |
+          gcc -std=c11 -O2 -Wall -Wextra -Werror \
+            tests/tcg/multiarch/rafaelia-square-median.c \
+            -o artifacts/rafaelia-square-median/geometry-x86_64
+          artifacts/rafaelia-square-median/geometry-x86_64
+
+      - name: Build freestanding ELF32 kernel
+        run: |
+          gcc -m32 -std=c11 -O2 -Wall -Wextra -Werror \
+            -ffreestanding -fno-stack-protector -fno-pie \
+            -c tests/tcg/multiarch/rafaelia-square-median.c \
+            -o artifacts/rafaelia-square-median/geometry-x86_32.o
+          cat > artifacts/rafaelia-square-median/start32.s <<'ASM'
+          .global _start
+          .section .text
+          _start:
+              call main
+              mov %eax, %ebx
+              mov $1, %eax
+              int $0x80
+          .section .note.GNU-stack,"",@progbits
+          ASM
+          as --32 artifacts/rafaelia-square-median/start32.s \
+            -o artifacts/rafaelia-square-median/start32.o
+          ld -m elf_i386 \
+            -o artifacts/rafaelia-square-median/geometry-x86_32 \
+            artifacts/rafaelia-square-median/geometry-x86_32.o \
+            artifacts/rafaelia-square-median/start32.o
+
+      - name: Seal ABI evidence
+        run: |
+          file artifacts/rafaelia-square-median/geometry-x86_64 \
+               artifacts/rafaelia-square-median/geometry-x86_32 \
+            > artifacts/rafaelia-square-median/ELF_TYPES.txt
+          readelf -h artifacts/rafaelia-square-median/geometry-x86_64 \
+            > artifacts/rafaelia-square-median/ELF64_HEADER.txt
+          readelf -h artifacts/rafaelia-square-median/geometry-x86_32 \
+            > artifacts/rafaelia-square-median/ELF32_HEADER.txt
+          sha256sum \
+            tests/tcg/multiarch/rafaelia-square-median.c \
+            tests/rafaelia/geometry_x3264_reference.py \
+            artifacts/rafaelia-square-median/geometry-x86_64 \
+            artifacts/rafaelia-square-median/geometry-x86_32 \
+            > artifacts/rafaelia-square-median/FILES.sha256
+          printf '%s\n' \
+            'exact_reference=PASS' \
+            'x86_64_native=PASS' \
+            'x86_32_elf_build=PASS' \
+            'x86_32_runtime=TOKEN_VAZIO_PENDING_QEMU_SOURCE_JOB' \
+            'claim_allowed=false' \
+            > artifacts/rafaelia-square-median/BOUNDARY.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rafaelia-square-median-abi-${{ github.sha }}
+          path: artifacts/rafaelia-square-median/
+          retention-days: 30
+
+  qemu-source-linux-user:
+    needs: exact-reference-and-abi
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install minimal QEMU build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build meson pkg-config \
+            libglib2.0-dev libpixman-1-dev
+
+      - name: Configure fork linux-user targets
+        run: |
+          mkdir -p build-x3264 artifacts/rafaelia-square-median
+          cd build-x3264
+          ../configure \
+            --target-list=i386-linux-user,x86_64-linux-user \
+            --disable-docs \
+            --disable-werror
+
+      - name: Build fork executors
+        run: ninja -C build-x3264 qemu-i386 qemu-x86_64
+
+      - name: Build dual-ABI test payloads
+        run: |
+          gcc -std=c11 -O2 -Wall -Wextra -Werror \
+            tests/tcg/multiarch/rafaelia-square-median.c \
+            -o artifacts/rafaelia-square-median/geometry-x86_64
+          gcc -m32 -std=c11 -O2 -Wall -Wextra -Werror \
+            -ffreestanding -fno-stack-protector -fno-pie \
+            -c tests/tcg/multiarch/rafaelia-square-median.c \
+            -o artifacts/rafaelia-square-median/geometry-x86_32.o
+          cat > artifacts/rafaelia-square-median/start32.s <<'ASM'
+          .global _start
+          .section .text
+          _start:
+              call main
+              mov %eax, %ebx
+              mov $1, %eax
+              int $0x80
+          .section .note.GNU-stack,"",@progbits
+          ASM
+          as --32 artifacts/rafaelia-square-median/start32.s \
+            -o artifacts/rafaelia-square-median/start32.o
+          ld -m elf_i386 \
+            -o artifacts/rafaelia-square-median/geometry-x86_32 \
+            artifacts/rafaelia-square-median/geometry-x86_32.o \
+            artifacts/rafaelia-square-median/start32.o
+
+      - name: Execute both ABIs through this QEMU fork
+        run: |
+          build-x3264/qemu-x86_64 \
+            artifacts/rafaelia-square-median/geometry-x86_64
+          build-x3264/qemu-i386 \
+            artifacts/rafaelia-square-median/geometry-x86_32
+
+      - name: Emit source-built QEMU receipt
+        if: always()
+        run: |
+          {
+            echo "qemu_base_commit=${GITHUB_SHA}"
+            build-x3264/qemu-x86_64 --version | head -1 || true
+            build-x3264/qemu-i386 --version | head -1 || true
+            echo 'system_under_test=source-built-qemu-linux-user'
+            echo 'full_system_guest_boot=TOKEN_VAZIO_NOT_IN_SCOPE'
+            echo 'claim_allowed=false'
+          } > artifacts/rafaelia-square-median/QEMU_SOURCE_RECEIPT.txt
+          sha256sum \
+            build-x3264/qemu-x86_64 \
+            build-x3264/qemu-i386 \
+            artifacts/rafaelia-square-median/geometry-x86_64 \
+            artifacts/rafaelia-square-median/geometry-x86_32 \
+            > artifacts/rafaelia-square-median/QEMU_SOURCE_FILES.sha256 || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rafaelia-square-median-qemu-source-${{ github.sha }}
+          path: artifacts/rafaelia-square-median/
+          if-no-files-found: warn
+          retention-days: 30
