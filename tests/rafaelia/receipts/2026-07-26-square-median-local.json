@@ -1,0 +1,85 @@
+{
+  "schema": "rafaelia.square-median-x3264.local-receipt.v2",
+  "observed_at": "2026-07-26",
+  "base_commit": "d4b3ef09956fa1abaeacba61dca3965f591c3a6a",
+  "observed_branch_head": "3ce1691ee346a93f8a5697ce5e0edf8e4072561f",
+  "host": {
+    "machine": "x86_64",
+    "kernel": "Linux 6.12.13 x86_64",
+    "python": "3.13.5",
+    "gcc": "14.2.0",
+    "clang": "17.0.0"
+  },
+  "exact_reference": {
+    "checks": 13,
+    "failures": 0,
+    "state": "PASS_EXACT_RATIONAL_MODEL",
+    "new_explicit_gates": [
+      "determinant_plus_half",
+      "determinant_minus_half"
+    ]
+  },
+  "width_virtualization": {
+    "x86_32": {
+      "iterations": 32,
+      "max_abs_numerator": 16777216,
+      "overflow": false,
+      "norm_progression_exact": true,
+      "pair_contraction_exact": true,
+      "state": "VERIFIED_BY_SIGNED_WIDTH_MODEL"
+    },
+    "x86_64": {
+      "iterations": 96,
+      "max_abs_numerator": 72057594037927936,
+      "overflow": false,
+      "norm_progression_exact": true,
+      "pair_contraction_exact": true,
+      "state": "VERIFIED_BY_SIGNED_WIDTH_MODEL"
+    }
+  },
+  "abi_artifacts": {
+    "x86_64": {
+      "file_class": "ELF64",
+      "machine": "Advanced Micro Devices X86-64",
+      "execution_exit_code": 0,
+      "sha256": "5cb37ffe69769a5bc10efc15c2f246adce2acd3d4497ff23f5b8e003d3f409f9",
+      "state": "PASS_NATIVE_HOST"
+    },
+    "x86_32": {
+      "file_class": "ELF32",
+      "machine": "Intel 80386",
+      "linkage": "statically linked freestanding",
+      "native_execution_exit_code": 126,
+      "native_execution_error": "Exec format error",
+      "sha256": "4a48875bece4424cc34eea94775b80c6e0006dddd70816a6ea1964f67712236f",
+      "state": "BUILD_PASS_RUNTIME_TOKEN_VAZIO"
+    }
+  },
+  "source_identity": {
+    "c_git_blob_sha1": "6c2740d95546acf33434d7a98d013b9f8f4d7359",
+    "reference_git_blob_sha1": "d88d2af5da658d07cec7c4f382997a60648b0e94",
+    "documentation_git_blob_sha1": "0a869cdf899eed66c6ead58f1be097128ea51536",
+    "exact_checkout_sha256": "TOKEN_VAZIO_PENDING_WORKFLOW_SEAL",
+    "equivalent_local_c_sha256": "0daebe041a6273700c745851485452e911efcdd525c87adcc0ecd3f3efc740e0",
+    "equivalent_local_reference_sha256": "fec31ffd67740ea10503bbe15a7929a7d2c1b2b104cb794c101bf8194dfc0666"
+  },
+  "infrastructure": {
+    "qemu_user_binary_present": false,
+    "package_install_attempted": true,
+    "package_install_result": "BLOCKED_NETWORK_TIMEOUT",
+    "source_built_qemu_execution": "TOKEN_VAZIO_PENDING_REMOTE_WORKFLOW",
+    "full_system_guest_boot": "TOKEN_VAZIO_NOT_ATTEMPTED"
+  },
+  "claim_boundary": {
+    "exact_geometry": "VERIFIED_LOCAL",
+    "determinant_area_gate": "VERIFIED_LOCAL",
+    "dual_width_integer_model": "VERIFIED_LOCAL",
+    "elf32_build": "VERIFIED_LOCAL",
+    "elf64_execution": "VERIFIED_LOCAL",
+    "qemu_i386_execution": "TOKEN_VAZIO",
+    "qemu_x86_64_execution": "TOKEN_VAZIO",
+    "performance_claim": false,
+    "physical_recovery_claim": false,
+    "claim_allowed": false
+  }
+}
