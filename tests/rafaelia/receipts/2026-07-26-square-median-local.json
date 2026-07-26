@@ -1,7 +1,8 @@
 {
-  "schema": "rafaelia.square-median-x3264.local-receipt.v1",
+  "schema": "rafaelia.square-median-x3264.local-receipt.v2",
   "observed_at": "2026-07-26",
   "base_commit": "d4b3ef09956fa1abaeacba61dca3965f591c3a6a",
+  "observed_branch_head": "3ce1691ee346a93f8a5697ce5e0edf8e4072561f",
   "host": {
     "machine": "x86_64",
     "kernel": "Linux 6.12.13 x86_64",
@@ -9,12 +10,14 @@
     "gcc": "14.2.0",
     "clang": "17.0.0"
   },
-  "reference_tests": {
-    "framework": "python unittest",
-    "tests_run": 9,
+  "exact_reference": {
+    "checks": 13,
     "failures": 0,
-    "errors": 0,
-    "state": "PASS_EXACT_REFERENCE"
+    "state": "PASS_EXACT_RATIONAL_MODEL",
+    "new_explicit_gates": [
+      "determinant_plus_half",
+      "determinant_minus_half"
+    ]
   },
   "width_virtualization": {
     "x86_32": {
@@ -52,11 +55,13 @@
       "state": "BUILD_PASS_RUNTIME_TOKEN_VAZIO"
     }
   },
-  "source_hashes": {
-    "square_median_rotation.py": "cd43199e8dad77f738bfa770a5b60d5912ada9d835c2b47b4b98a274da14d7d7",
-    "test_square_median_rotation.py": "1fd6d6706a0f5729cff55d54b86c14590063a74be511d1a2a88e246f67627aed",
-    "rafaelia-square-median.c": "ecdc516f0bbc585b2b86405d12396fa60c1b5dd259fbc3c7a5551341ce82ecf5",
-    "reference_receipt": "439c0c27e5ee358c4045393321db2414ca088a44c1f72809afe715eca52640a0"
+  "source_identity": {
+    "c_git_blob_sha1": "6c2740d95546acf33434d7a98d013b9f8f4d7359",
+    "reference_git_blob_sha1": "d88d2af5da658d07cec7c4f382997a60648b0e94",
+    "documentation_git_blob_sha1": "0a869cdf899eed66c6ead58f1be097128ea51536",
+    "exact_checkout_sha256": "TOKEN_VAZIO_PENDING_WORKFLOW_SEAL",
+    "equivalent_local_c_sha256": "0daebe041a6273700c745851485452e911efcdd525c87adcc0ecd3f3efc740e0",
+    "equivalent_local_reference_sha256": "fec31ffd67740ea10503bbe15a7929a7d2c1b2b104cb794c101bf8194dfc0666"
   },
   "infrastructure": {
     "qemu_user_binary_present": false,
@@ -67,6 +72,7 @@
   },
   "claim_boundary": {
     "exact_geometry": "VERIFIED_LOCAL",
+    "determinant_area_gate": "VERIFIED_LOCAL",
     "dual_width_integer_model": "VERIFIED_LOCAL",
     "elf32_build": "VERIFIED_LOCAL",
     "elf64_execution": "VERIFIED_LOCAL",
