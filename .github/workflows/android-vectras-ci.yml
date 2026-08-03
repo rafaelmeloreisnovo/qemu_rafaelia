@@ -48,7 +48,7 @@ jobs:
         run: |
           test -x ./gradlew || chmod +x ./gradlew
 
-      - name: Test and build debug APK (arm64-v8a)
+      - name: Test and build debug APK (arm64-v8a + armeabi-v7a)
         run: ./gradlew --no-daemon --no-build-cache testDebugUnitTest assembleDebug
 
       - name: Upload APK and test reports
