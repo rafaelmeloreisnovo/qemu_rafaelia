@@ -1,0 +1,79 @@
+{
+  "schema": "rafaelia.large-upstream-assurance.v1",
+  "repository": "rafaelmeloreisnovo/qemu_rafaelia",
+  "observed_commit": "b274de47403f48136d1969f7663aa457383e3ef4",
+  "classification": "LARGE_UPSTREAM_DERIVATIVE",
+  "license": {
+    "root_anchor": "COPYING@8095135d50d970174ab0167816e259b677f4430a",
+    "observed_root_text": "GPL-2.0",
+    "submodules_present": true,
+    "path_and_submodule_terms_control_where_applicable": true,
+    "rafaelia_relicense_of_upstream_allowed": false
+  },
+  "provenance": {
+    "upstream_identity": "TOKEN_VAZIO_EXACT_UPSTREAM_BASELINE",
+    "authorial_delta_boundary": "TOKEN_VAZIO",
+    "generated_files_state": "TOKEN_VAZIO_PATH_CLASSIFICATION",
+    "submodule_license_reconciliation": "TOKEN_VAZIO",
+    "ownership_claimed_by_manifest": false
+  },
+  "runtime": {
+    "source_presence_is_qemu_runtime": false,
+    "build_is_target_runtime": false,
+    "qemu_process_is_guest_boot": false,
+    "guest_boot_is_performance_or_correctness_totality": false,
+    "current_target_device_execution": "TOKEN_VAZIO"
+  },
+  "security": {
+    "state": "TOKEN_VAZIO_PER_DELTA_AND_TARGET",
+    "critical_surfaces": [
+      "device emulation",
+      "block/image handling",
+      "network backends",
+      "migration",
+      "monitor/QMP",
+      "acceleration",
+      "target translators",
+      "submodules"
+    ],
+    "security_claim_from_brand_or_upstream": false
+  },
+  "gates": [
+    {"id":"UPSTREAM_LICENSE_PRESERVED","state":"IMPLEMENTED","falsifier":"COPYING missing or assurance claims incompatible root relicensing"},
+    {"id":"UPSTREAM_BASELINE_BOUND","state":"TOKEN_VAZIO","falsifier":"no exact upstream origin/baseline is linked"},
+    {"id":"DELTA_PROVENANCE_BOUND","state":"TOKEN_VAZIO","falsifier":"changed hunk has no origin/license classification"},
+    {"id":"SUBMODULE_TERMS_BOUND","state":"TOKEN_VAZIO","falsifier":"submodule material is treated as governed solely by root COPYING"},
+    {"id":"RUNTIME_EQUIVALENCE","state":"TOKEN_VAZIO","falsifier":"modified QEMU behavior lacks target-specific test/evidence"}
+  ],
+  "gaps": [
+    {"id":"TV-QEMU-UPSTREAM-BASELINE","state":"TOKEN_VAZIO","urgency":"P0","owner":"provenance_auditor","closure":"identify exact upstream source lineage and baseline commit"},
+    {"id":"TV-QEMU-DELTA","state":"TOKEN_VAZIO","urgency":"P0","owner":"repository_maintainer","closure":"classify changed paths/hunks as upstream, authorial, generated or third-party"},
+    {"id":"TV-QEMU-SUBMODULE-LICENSES","state":"TOKEN_VAZIO","urgency":"P0","owner":"license_provenance_auditor","closure":"bind submodule identities and governing terms without flattening"},
+    {"id":"TV-QEMU-TARGET-RUNTIME","state":"TOKEN_VAZIO","urgency":"P1","owner":"runtime_evidence_producer","closure":"execute exact modified binary on the target scope claimed and preserve result receipt"}
+  ],
+  "risk": {
+    "severity": "CRITICAL",
+    "summary": "large multi-component virtualization upstream can be accidentally relicensed, misattributed or declared runtime-correct from source/build presence",
+    "mitigations": [
+      "never modify upstream license through assurance layer",
+      "path/hunk provenance before authorship claim",
+      "submodule-aware licensing",
+      "target-specific runtime evidence",
+      "separate process/guest/performance claims",
+      "assurance files remain outside QEMU core"
+    ]
+  },
+  "protected_core_by_assurance_policy": [
+    "accel/",
+    "block/",
+    "hw/",
+    "target/",
+    "migration/",
+    "net/"
+  ],
+  "rollback": {
+    "available": true,
+    "procedure": "revert only docs/rafaelia and its CI validator; QEMU core remains untouched by this assurance change"
+  },
+  "claim_allowed": false
+}

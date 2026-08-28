@@ -1,0 +1,44 @@
+name: RAFAELIA Upstream Assurance
+
+on:
+  push:
+    paths:
+      - 'docs/rafaelia/upstream-assurance.v1.json'
+      - 'scripts/validate_rafaelia_upstream_assurance.py'
+      - '.github/workflows/rafaelia-upstream-assurance.yml'
+  pull_request:
+    paths:
+      - 'docs/rafaelia/upstream-assurance.v1.json'
+      - 'scripts/validate_rafaelia_upstream_assurance.py'
+      - '.github/workflows/rafaelia-upstream-assurance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  assurance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate upstream/license/provenance boundaries
+        run: python3 scripts/validate_rafaelia_upstream_assurance.py
+      - name: Negative gate — unknown delta cannot become owned/runtime PASS
+        run: |
+          cp docs/rafaelia/upstream-assurance.v1.json /tmp/qemu-assurance.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('docs/rafaelia/upstream-assurance.v1.json')
+          d = json.loads(p.read_text())
+          d['provenance']['authorial_delta_boundary'] = 'PASS'
+          d['provenance']['ownership_claimed_by_manifest'] = True
+          d['runtime']['source_presence_is_qemu_runtime'] = True
+          d['claim_allowed'] = True
+          p.write_text(json.dumps(d))
+          PY
+          if python3 scripts/validate_rafaelia_upstream_assurance.py; then
+            echo 'FAIL: unproven upstream delta was promoted' >&2
+            exit 1
+          fi
+          mv /tmp/qemu-assurance.json docs/rafaelia/upstream-assurance.v1.json
+          python3 scripts/validate_rafaelia_upstream_assurance.py
