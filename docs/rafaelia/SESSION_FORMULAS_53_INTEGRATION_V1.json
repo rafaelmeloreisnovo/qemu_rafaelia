@@ -1,0 +1,14 @@
+{
+  "schema":"rafaelia.session_formula_integration.v1",
+  "canonical_repo":"rafaelmeloreisnovo/Mapa",
+  "canonical_path":"data/formulas/SESSION_FORMULA_REGISTRY_53_V1.json",
+  "registry_id":"SESSION-FORMULAS-53-20260830-V1",
+  "exact_count":53,
+  "canonical_range":"F01..F53",
+  "local_repo":"rafaelmeloreisnovo/qemu_rafaelia",
+  "role":"EMULATION_AND_REFERENCE_BENCHMARK_ROUTE",
+  "applicable_ids":["F12","F15","F21","F22","F23","F24","F26","F27","F28","F29","F30","F33","F51","F52","F53"],
+  "requirements":["scalar_reference","instruction_trace","emulation_ne_hardware","watchdog_budget","rollback_anchor"],
+  "hardware_performance_claim":"TOKEN_VAZIO",
+  "claim_allowed":false
+}
