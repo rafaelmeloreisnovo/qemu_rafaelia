@@ -1,0 +1,33 @@
+name: RAFCODE QEMU guest v2 scoped static gates
+on:
+  pull_request:
+    paths:
+      - 'rafcode/qemu_guest_v2/**'
+      - '001_PONTEIRO/QEMU_GUEST_V2.md'
+      - '.github/workflows/rafcode-qemu-guest-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guest-v2-scope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Test GCC and Clang across O0 O2 Os
+        run: |
+          CC=gcc sh rafcode/qemu_guest_v2/run-local.sh
+          CC=clang sh rafcode/qemu_guest_v2/run-local.sh
+      - name: Four ABI link-only ELF checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd rafcode/qemu_guest_v2
+          for target in armv7a-linux-gnueabi aarch64-linux-gnu i386-linux-gnu x86_64-linux-gnu; do
+            clang --target="$target" -O2 -std=c11 -ffreestanding -fno-builtin \
+              -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables \
+              -nostdinc -fuse-ld=lld -nostdlib -static \
+              -Wl,--no-undefined -Wl,-e,raf_guest_move raf_guest.c -o "/tmp/qemu-$target.elf"
+            test -z "$(nm -u "/tmp/qemu-$target.elf")"
+            ! readelf -l "/tmp/qemu-$target.elf" | grep -q INTERP
+            echo "PASS LINK_ONLY $target"
+          done
