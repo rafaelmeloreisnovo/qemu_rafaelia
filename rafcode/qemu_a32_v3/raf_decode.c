@@ -41,7 +41,7 @@ int r_decode(r32 w, rdecoded *o)
         /* A32 immediate word transfer: preindexed, no writeback, no byte. */
         if (!(w&0x01000000u) || (w&0x00600000u) ||
             o->rn==15u || o->rd==15u) return R_UNSUPPORTED;
-        o->imm=w&4095u; o->type=o->s ? R_LDR : R_STR;
+        o->imm=w&4095u; o->type=(r8)(o->s ? R_LDR : R_STR);
         return R_OK;
     }
     return R_UNSUPPORTED;
