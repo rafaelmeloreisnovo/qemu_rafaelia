@@ -10,8 +10,9 @@ enum { R_OK=0, R_IRQ=1, R_SVC=2, R_BUDGET=3, R_UNSUPPORTED=-1,
        R_MEMFAULT=-2, R_BAD_STATE=-3 };
 enum { R_READ=1, R_WRITE=2, R_EXEC=4, R_PAGE=4096, R_MAPS=8, R_SECTOR=512 };
 enum { R_C=0x20000000u, R_V=0x10000000u, R_Z=0x40000000u,
-       R_N=0x80000000u, R_I=0x80u, R_T=0x20u, R_MODE=0x1fu,
+       R_I=0x80u, R_T=0x20u, R_MODE=0x1fu,
        R_SYS=0x1fu, R_IRQ_MODE=0x12u };
+#define R_N ((r32)0x80000000u) /* C11 enum values must fit int. */
 typedef struct { r32 vpn; r64 pfn; r8 perm; r8 used; } rmap;
 typedef struct { rmap entry[R_MAPS]; } rmmu;
 typedef struct { r32 r[16]; r32 cpsr, spsr_irq, sp_irq, lr_irq;
