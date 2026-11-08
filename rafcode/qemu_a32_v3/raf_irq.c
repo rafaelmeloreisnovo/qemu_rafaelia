@@ -16,7 +16,7 @@ int r_irq_enter(rcpu *c, rirq *irq)
     c->saved_sp=c->r[13]; c->saved_lr=c->r[14];
     c->r[13]=c->sp_irq; c->r[14]=c->r[15]+4u;
     c->lr_irq=c->r[14];
-    c->cpsr=(c->cpsr & ~(R_MODE|R_T)) | R_IRQ_MODE | R_I;
+    c->cpsr=(c->cpsr & ~((r32)(R_MODE|R_T))) | (r32)(R_IRQ_MODE|R_I);
     c->r[15]=c->vector_base+0x18u;
     irq->pending=0;
     return R_IRQ;
